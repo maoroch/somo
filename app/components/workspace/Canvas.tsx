@@ -1,4 +1,4 @@
-import React, { memo, forwardRef, useEffect } from 'react';
+import React, { memo, forwardRef, useEffect, useState } from 'react';
 import { Sparkles, Wand2, Type } from 'lucide-react';
 import CanvasElementComponent, { CanvasElement } from './CanvasElement';
 import { Tool } from './Types';
@@ -51,8 +51,39 @@ const Canvas = forwardRef<HTMLDivElement, CanvasProps>(({
   onPanOffsetChange,
   colors
 }, viewportRef) => {
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+
+  // Отслеживаем размеры viewport
+  useEffect(() => {
+    const viewport = viewportRef as React.RefObject<HTMLDivElement>;
+    if (!viewport.current) return;
+
+    const updateViewportSize = () => {
+      if (viewport.current) {
+        setViewportSize({
+          width: viewport.current.clientWidth,
+          height: viewport.current.clientHeight,
+        });
+      }
+    };
+
+    updateViewportSize();
+    window.addEventListener('resize', updateViewportSize);
+    
+    return () => window.removeEventListener('resize', updateViewportSize);
+  }, [viewportRef]);
+
+  // Рассчитываем центрированные координаты
+  const canvasWidth = 10920;
+  const canvasHeight = 10080;
+  const scale = zoom / 100;
   
-  // Обработка wheel для зума и паннинга
+  const centeredPanOffset = {
+    x: panOffset.x + (viewportSize.width - canvasWidth * scale) / 2,
+    y: panOffset.y + (viewportSize.height - canvasHeight * scale) / 2,
+  };
+
+  // Обработка wheel для зума и паннинга с учетом центрирования
   useEffect(() => {
     const viewport = viewportRef as React.RefObject<HTMLDivElement>;
     if (!viewport.current) return;
@@ -72,24 +103,31 @@ const Canvas = forwardRef<HTMLDivElement, CanvasProps>(({
       }
 
       if (e.ctrlKey || e.metaKey) {
-        // Зум
+        // Зум с учетом центрирования
         const rect = viewport.current!.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
         
-        const canvasX = (mouseX - panOffset.x) / (zoom / 100);
-        const canvasY = (mouseY - panOffset.y) / (zoom / 100);
+        // Используем центрированные координаты для расчетов
+        const canvasX = (mouseX - centeredPanOffset.x) / scale;
+        const canvasY = (mouseY - centeredPanOffset.y) / scale;
         
         const zoomFactor = Math.exp(-dy * ZOOM_SENSITIVITY);
         const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * zoomFactor));
+        const newScale = newZoom / 100;
         
-        const newPanX = mouseX - canvasX * (newZoom / 100);
-        const newPanY = mouseY - canvasY * (newZoom / 100);
+        // Рассчитываем новый панорам с учетом центрирования
+        const newCenteredPanX = mouseX - canvasX * newScale;
+        const newCenteredPanY = mouseY - canvasY * newScale;
+        
+        // Конвертируем обратно в оригинальные координаты
+        const originalPanX = newCenteredPanX - (viewportSize.width - canvasWidth * newScale) / 2;
+        const originalPanY = newCenteredPanY - (viewportSize.height - canvasHeight * newScale) / 2;
         
         onZoomChange(newZoom);
-        onPanOffsetChange({ x: newPanX, y: newPanY });
+        onPanOffsetChange({ x: originalPanX, y: originalPanY });
       } else {
-        // Паннинг
+        // Паннинг - просто применяем дельту
         onPanOffsetChange({
           x: panOffset.x - dx,
           y: panOffset.y - dy,
@@ -102,7 +140,7 @@ const Canvas = forwardRef<HTMLDivElement, CanvasProps>(({
     return () => {
       viewport.current?.removeEventListener('wheel', handleWheel);
     };
-  }, [zoom, panOffset, viewportRef, onZoomChange, onPanOffsetChange]);
+  }, [zoom, panOffset, viewportRef, onZoomChange, onPanOffsetChange, viewportSize, centeredPanOffset.x, centeredPanOffset.y, scale]);
 
   return (
     <div
@@ -124,9 +162,9 @@ const Canvas = forwardRef<HTMLDivElement, CanvasProps>(({
         <div
           className={`relative ${colors.canvas} shadow-2xl rounded-lg overflow-hidden`}
           style={{
-            width: 1920,
-            height: 1080,
-            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom / 100})`,
+            width: canvasWidth,
+            height: canvasHeight,
+            transform: `translate(${centeredPanOffset.x}px, ${centeredPanOffset.y}px) scale(${scale})`,
             transformOrigin: '0 0',
             border: `1px solid ${isDarkMode ? 'rgba(77, 74, 255, 0.2)' : 'rgba(77, 74, 255, 0.15)'}`,
           }}
@@ -145,18 +183,18 @@ const Canvas = forwardRef<HTMLDivElement, CanvasProps>(({
           )}
 
           {/* Canvas Elements */}
-{elements.length === 0 ? (
-  <div 
-    className="absolute pointer-events-none"
-    style={{
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: '100%',
-      maxWidth: '480px'
-    }}
-  >
-    <div className="text-center space-y-4">
+          {elements.length === 0 ? (
+            <div 
+              className="absolute pointer-events-none"
+              style={{
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '100%',
+                maxWidth: '480px'
+              }}
+            >
+              <div className="text-center space-y-4">
                 <div
                   className="w-20 h-20 mx-auto rounded-full flex items-center justify-center"
                   style={{

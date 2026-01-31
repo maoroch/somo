@@ -60,6 +60,6 @@ export const tools = [
   { id: 'select', icon: MousePointer, label: 'Select' },
   { id: 'text', icon: Type, label: 'Text' },
   { id: 'image', icon: ImageIcon, label: 'Image' },
-  { id: 'shape', icon: Square, label: 'Shape' },
+  { id: 'frame', icon: Square, label: 'Frame' },
   { id: 'ai', icon: Wand2, label: 'AI Generate' },
 ];

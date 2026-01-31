@@ -10,6 +10,7 @@ export default function SomoLanding() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
   // Инициализация темы при монтировании
   useEffect(() => {
@@ -17,6 +18,7 @@ export default function SomoLanding() {
     setIsDarkMode(initialTheme === 'dark');
     setIsLoaded(true);
   }, []);
+  
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
