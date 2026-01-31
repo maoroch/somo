@@ -3,26 +3,41 @@ import Link from 'next/link';
 import Image from 'next/image';
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, Play, Sparkles, Zap, BarChart3, Users, Moon, Sun } from 'lucide-react';
+import { getInitialTheme, saveTheme, type Theme } from '@/lib/theme-utils';
 
 export default function SomoLanding() {
   const [scrollY, setScrollY] = useState(0);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Инициализация темы при монтировании
+  useEffect(() => {
+    const initialTheme = getInitialTheme();
+    setIsDarkMode(initialTheme === 'dark');
+    setIsLoaded(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
-    const handleMouseMove = (e: React.MouseEvent) => {
+    const handleMouseMove = (e: MouseEvent) => {
       setMousePos({ x: e.clientX, y: e.clientY });
     };
 
     window.addEventListener('scroll', handleScroll);
-    document.addEventListener('mousemove', handleMouseMove as any);
+    document.addEventListener('mousemove', handleMouseMove);
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('mousemove', handleMouseMove as any);
+      document.removeEventListener('mousemove', handleMouseMove);
     };
   }, []);
+
+  const toggleTheme = () => {
+    const newTheme: Theme = isDarkMode ? 'light' : 'dark';
+    setIsDarkMode(!isDarkMode);
+    saveTheme(newTheme);
+  };
 
   // Цветовые схемы
   const colors = {
@@ -53,6 +68,13 @@ export default function SomoLanding() {
   };
 
   const currentColors = isDarkMode ? colors.dark : colors.light;
+
+  // Избегаем мерцания при первой загрузке
+  if (!isLoaded) {
+    return (
+      <div className={`min-h-screen bg-gradient-to-b ${currentColors.bg}`}></div>
+    );
+  }
 
   return (
     <div className={`min-h-screen bg-gradient-to-b ${currentColors.bg} ${currentColors.text} overflow-hidden transition-colors duration-500`}>
@@ -115,9 +137,10 @@ export default function SomoLanding() {
           <div className="flex items-center gap-3">
             {/* Theme Toggle Button */}
             <button 
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode ? 'bg-slate-900/50 hover:bg-slate-800' : 'bg-slate-200 hover:bg-slate-300'}`}
+              onClick={toggleTheme}
+              className={`p-2 rounded-lg transition-all duration-300 hover:scale-110 ${isDarkMode ? 'bg-slate-900/50 hover:bg-slate-800' : 'bg-slate-200 hover:bg-slate-300'}`}
               aria-label="Toggle theme"
+              title={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
             >
               {isDarkMode ? (
                 <Sun className="w-5 h-5 text-yellow-400" />
@@ -406,9 +429,9 @@ export default function SomoLanding() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/sign-up">
-                            <button className="px-8 py-4 rounded-lg font-bold text-lg hover:shadow-2xl transition-all text-white" style={{background: 'linear-gradient(135deg, #4D4AFF, #0300BA)', boxShadow: '0 0 30px rgba(77, 74, 255, 0.3)'}}>
-                Get Started Free
-              </button>
+                <button className="px-8 py-4 rounded-lg font-bold text-lg hover:shadow-2xl transition-all text-white" style={{background: 'linear-gradient(135deg, #4D4AFF, #0300BA)', boxShadow: '0 0 30px rgba(77, 74, 255, 0.3)'}}>
+                  Get Started Free
+                </button>
               </Link>
               <button className="px-8 py-4 border rounded-lg font-bold text-lg transition-all hover:shadow-lg" style={{borderColor: 'rgba(77, 74, 255, 0.5)', color: '#4D4AFF'}}>
                 View Pricing
