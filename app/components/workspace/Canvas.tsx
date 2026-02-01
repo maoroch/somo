@@ -74,8 +74,8 @@ const Canvas = forwardRef<HTMLDivElement, CanvasProps>(({
   }, [viewportRef]);
 
   // Рассчитываем центрированные координаты
-  const canvasWidth = 10920;
-  const canvasHeight = 10080;
+  const canvasWidth = 100920;
+  const canvasHeight = 100080;
   const scale = zoom / 100;
   
   const centeredPanOffset = {

@@ -1,14 +1,15 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getInitialTheme, saveTheme, type Theme } from '@/lib/theme-utils';
-import SettingsPopup from '@/app/components/workspace/SettingsPopup';
-
+import SettingsPopup from '@/app/components/workspace/popups/SettingsPopup';
+import ProjectsPopup from '@/app/components/workspace/popups/ProjectsPopup';
 // Компоненты
 import Navbar from '@/app/components/workspace/Navbar';
 import Sidebar from '@/app/components/workspace/Sidebar';
 import CanvasToolbar from '@/app/components/workspace/CanvasToolbar';
 import Canvas from '@/app/components/workspace/Canvas';
-import { CanvasElement } from '@/app/components/workspace/CanvasElement';
+import { CanvasElement, ElementType } from '@/app/components/workspace/Types';
+import { ElementFactory } from '@/app/components/workspace/tools/ElementFactory';
 
 // Константы и типы
 import { colors, sidebarItems, tools, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from '@/app/components/workspace/Constants';
@@ -19,6 +20,7 @@ import { useCanvasPan, useKeyboardShortcuts } from '@/app/components/workspace/H
 
 export default function WorkspacePage() {
   // Состояния UI
+  const [showProjectsPopup, setShowProjectsPopup] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -78,34 +80,16 @@ export default function WorkspacePage() {
     setShowGrid(prev => !prev);
   }, []);
 
-  const addElement = useCallback((type: CanvasElement['type']) => {
-    const newElement: CanvasElement = {
-      id: `element-${Date.now()}`,
-      type,
+  const addElement = useCallback((type: ElementType) => {
+    const newElement = ElementFactory.createElement(type, {
       x: 100,
       y: 100,
-      width: type === 'text' ? 200 : 300,
-      height: type === 'text' ? 50 : 200,
-      ...(type === 'text' && {
-        content: 'Double click to edit',
-        fontSize: 24,
-        fontFamily: 'Inter',
-        color: isDarkMode ? '#ffffff' : '#000000'
-      }),
-      ...(type === 'shape' && {
-        color: '#4D4AFF'
-      }),
-      rotation: 0,
-      opacity: 1
-    };
+      isDarkMode
+    });
     setCanvasElements(prev => [...prev, newElement]);
     setSelectedElement(newElement.id);
-  }, [isDarkMode]);
-
-  const handleAddText = useCallback(() => {
-    addElement('text');
     setActiveTool('select');
-  }, [addElement]);
+  }, [isDarkMode]);
 
   const handleSelectElement = useCallback((id: string) => {
     setSelectedElement(id);
@@ -139,7 +123,13 @@ export default function WorkspacePage() {
         isDarkMode={isDarkMode}
         activeTool={activeTool}
         showSettingsPopup={showSettingsPopup}
-        onToolChange={setActiveTool}
+        onToolChange={(tool) => {
+          if (tool === 'text' || tool === 'image' || tool === 'frame') {
+            addElement(tool);
+          } else {
+            setActiveTool(tool);
+          }
+        }}
         onSettingsClick={() => setShowSettingsPopup(true)}
         colors={currentColors}
         tools={tools}
@@ -148,15 +138,17 @@ export default function WorkspacePage() {
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
-          items={sidebarItems}
-          isDarkMode={isDarkMode}
-          showSettingsPopup={showSettingsPopup}
-          onSettingsClick={() => setShowSettingsPopup(true)}
-          colors={currentColors}
-        />
+<Sidebar
+  collapsed={sidebarCollapsed}
+  onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
+  items={sidebarItems}
+  isDarkMode={isDarkMode}
+  showSettingsPopup={showSettingsPopup}
+  onSettingsClick={() => setShowSettingsPopup(true)}
+  showProjectsPopup={showProjectsPopup}           // ← настоящее состояние
+  onProjectsClick={() => setShowProjectsPopup(true)} // ← открывает попап
+  colors={currentColors}
+/>
 
         {/* Canvas Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -184,8 +176,14 @@ export default function WorkspacePage() {
             onMouseUp={handleMouseUp}
             onSelectElement={handleSelectElement}
             onUpdateElement={handleUpdateElement}
-            onActivateTool={setActiveTool}
-            onAddText={handleAddText}
+            onActivateTool={(tool) => {
+              if (tool === 'text' || tool === 'image' || tool === 'frame') {
+                addElement(tool);
+              } else {
+                setActiveTool(tool);
+              }
+            }}
+            onAddText={() => addElement('text')}
             onZoomChange={handleZoomChange}
             onPanOffsetChange={handlePanOffsetChange}
             colors={currentColors}
@@ -193,13 +191,19 @@ export default function WorkspacePage() {
         </div>
       </div>
 
-      {/* Settings Popup */}
-      <SettingsPopup
-        isOpen={showSettingsPopup}
-        onClose={() => setShowSettingsPopup(false)}
-        isDarkMode={isDarkMode}
-        onToggleTheme={toggleTheme}
-      />
+{/* Popups */}
+<ProjectsPopup
+  isOpen={showProjectsPopup}
+  onClose={() => setShowProjectsPopup(false)}
+  isDarkMode={isDarkMode}           // ← передаём тему
+/>
+
+<SettingsPopup
+  isOpen={showSettingsPopup}
+  onClose={() => setShowSettingsPopup(false)}
+  isDarkMode={isDarkMode}
+  onToggleTheme={toggleTheme}
+/>
 
       {/* Стили */}
       <style jsx>{`

@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from 'react';
-import { CanvasElement } from './CanvasElement';
+import { CanvasElement } from './Types';
 
 export const useCanvasPan = () => {
   const [isPanning, setIsPanning] = useState(false);

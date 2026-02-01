@@ -17,6 +17,8 @@ interface SidebarProps {
   isDarkMode: boolean;
   showSettingsPopup: boolean;
   onSettingsClick: () => void;
+  showProjectsPopup: boolean;
+  onProjectsClick: () => void;
   colors: {
     sidebar: string;
     border: string;
@@ -34,6 +36,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   isDarkMode,
   showSettingsPopup,
   onSettingsClick,
+  showProjectsPopup,
+  onProjectsClick,
   colors
 }) => {
   return (
@@ -64,6 +68,49 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Items */}
       <nav className="flex-1 px-2 space-y-1">
         {items.map((item, i) => {
+          // Projects
+          if (item.href === '/projects') {
+            return (
+              <button
+                key={i}
+                onClick={onProjectsClick}
+                className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${
+                  showProjectsPopup ? 'text-white' : colors.textSecondary
+                } ${!showProjectsPopup && colors.hover}`}
+                style={
+                  showProjectsPopup
+                    ? {
+                        background: 'linear-gradient(135deg, #4D4AFF, #0300BA)',
+                        boxShadow: '0 4px 12px rgba(77, 74, 255, 0.3)'
+                      }
+                    : {}
+                }
+                title={collapsed ? item.label : ''}
+              >
+                <item.icon className={`w-5 h-5 ${collapsed ? 'mx-auto' : ''}`} />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 font-medium">{item.label}</span>
+                    {item.badge && (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          item.badge === 'NEW'
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
+                            : isDarkMode
+                            ? 'bg-slate-700 text-slate-300'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            );
+          }
+
+          // Settings
           if (item.href === '/settings') {
             return (
               <button
@@ -105,6 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             );
           }
 
+          // Все остальные пункты — Link
           return (
             <Link
               key={i}
