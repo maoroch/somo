@@ -135,7 +135,7 @@ export default function SignInPage() {
       if (data?.session) {
         setSuccess(true);
         setTimeout(() => {
-          router.push('/dashboard');
+          router.push('/profile');
         }, 2000);
       }
 
@@ -252,7 +252,7 @@ export default function SignInPage() {
                   <Check className="w-5 h-5 flex-shrink-0" />
                   <div>
                     <p className="text-sm font-medium mb-1">Signed in successfully!</p>
-                    <p className="text-sm opacity-90">Redirecting to dashboard...</p>
+                    <p className="text-sm opacity-90">Redirecting to profile...</p>
                   </div>
                 </div>
               </div>

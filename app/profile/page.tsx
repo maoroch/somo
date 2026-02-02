@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Settings, 
   Share2, 
@@ -22,26 +22,28 @@ import {
   Video,
   Clock,
   Download,
-  MoreHorizontal
+  MoreHorizontal,
+  Loader
 } from 'lucide-react';
 import { getInitialTheme, saveTheme, type Theme } from '@/lib/theme-utils';
+import { createClient } from '@/lib/supabase/client';
 
-interface VideoProject {
-  id: string;
-  title: string;
-  thumbnail: string;
-  duration: string;
-  views: number;
-  likes: number;
-  createdAt: string;
-  category: string;
-}
+const PAGE_SIZE = 6;
 
 export default function ProfilePage() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'all' | 'trending' | 'recent'>('all');
+  
+  // Состояние для данных
+  const [profile, setProfile] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [visibleVideos, setVisibleVideos] = useState(PAGE_SIZE);
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Инициализация темы
   useEffect(() => {
@@ -50,14 +52,159 @@ export default function ProfilePage() {
     setIsLoaded(true);
   }, []);
 
-  const toggleTheme = () => {
+  // Загрузка ВСЕХ данных одним запросом (оптимизировано)
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const fetchAllData = async () => {
+      try {
+        setLoading(true);
+        const supabase = createClient();
+
+        // Получаем текущего пользователя
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          setError('User not authenticated');
+          setLoading(false);
+          return;
+        }
+
+        // Загружаем ВСЕ данные параллельно (не последовательно!)
+        const [profileRes, statsRes, videosRes] = await Promise.all([
+          // Профиль
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single(),
+          
+          // Статистика
+          supabase
+            .from('user_stats')
+            .select('videos, total_views, followers, likes')
+            .eq('user_id', user.id)
+            .single(),
+          
+          // Видео (только первые PAGE_SIZE для быстрой загрузки)
+          supabase
+            .from('video_projects')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(PAGE_SIZE)
+        ]);
+
+        // Обрабатываем профиль
+        if (profileRes.data) {
+          setProfile(profileRes.data);
+        } else if (profileRes.error) {
+          console.error('Profile error:', profileRes.error);
+        }
+
+        // Обрабатываем статистику
+        if (statsRes.data) {
+          setStats({
+            videos: statsRes.data.videos || 0,
+            totalViews: statsRes.data.total_views || 0,
+            followers: statsRes.data.followers || 0,
+            likes: statsRes.data.likes || 0
+          });
+        }
+
+        // Обрабатываем видео
+        if (videosRes.data) {
+          setVideos(videosRes.data.map(v => ({
+            id: v.id,
+            title: v.title,
+            thumbnail: v.thumbnail_url,
+            duration: v.duration || '0:00',
+            views: v.views || 0,
+            likes: v.likes || 0,
+            createdAt: formatDate(v.created_at),
+            category: v.category || 'Uncategorized'
+          })));
+        }
+
+        setError(null);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error loading data:', err);
+        setError('Failed to load data');
+        setLoading(false);
+      }
+    };
+
+    fetchAllData();
+  }, [isLoaded]);
+
+  // Загрузка ещё видео при нажатии "Load More"
+  const handleLoadMore = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return;
+
+      const { data: moreVideos } = await supabase
+        .from('video_projects')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .range(visibleVideos, visibleVideos + PAGE_SIZE - 1);
+
+      if (moreVideos) {
+        const formattedVideos = moreVideos.map(v => ({
+          id: v.id,
+          title: v.title,
+          thumbnail: v.thumbnail_url,
+          duration: v.duration || '0:00',
+          views: v.views || 0,
+          likes: v.likes || 0,
+          createdAt: formatDate(v.created_at),
+          category: v.category || 'Uncategorized'
+        }));
+        
+        setVideos(prev => [...prev, ...formattedVideos]);
+        setVisibleVideos(prev => prev + PAGE_SIZE);
+      }
+    } catch (err) {
+      console.error('Error loading more videos:', err);
+    }
+  }, [visibleVideos]);
+
+  const toggleTheme = useCallback(() => {
     const newTheme: Theme = isDarkMode ? 'light' : 'dark';
     setIsDarkMode(!isDarkMode);
     saveTheme(newTheme);
+  }, [isDarkMode]);
+
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
   };
 
-  // Цветовые схемы
-  const colors = {
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return `${Math.floor(diffDays / 30)} months ago`;
+  };
+
+  const formatJoinDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  // Мемоизируем цвета чтобы не пересчитывать
+  const colors = useMemo(() => ({
     dark: {
       bg: 'from-slate-950 via-slate-900 to-slate-950',
       navBg: 'bg-slate-950/60',
@@ -80,137 +227,30 @@ export default function ProfilePage() {
       cardBorder: 'rgba(77, 74, 255, 0.15)',
       bannerOverlay: 'from-white/60 via-white/40 to-white/80',
     },
-  };
+  }), []);
 
-  const currentColors = isDarkMode ? colors.dark : colors.light;
-
-  // Моковые данные пользователя
-  const userProfile = {
-    name: 'Alexandra Williams',
-    username: '@alex_creates',
-    bio: 'Professional video creator & AI enthusiast. Turning ideas into stunning visual stories with Somo AI.',
-    avatar: '👩‍🎨',
-    banner: 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1200',
-    joinDate: 'January 2024',
-    location: 'San Francisco, CA',
-    website: 'alexcreates.com',
-    email: 'alex@example.com',
-    stats: {
-      videos: 127,
-      totalViews: '2.4M',
-      followers: '48.5K',
-      likes: '156K'
-    }
-  };
-
-  // Моковые проекты
-  const videoProjects: VideoProject[] = [
-    {
-      id: '1',
-      title: 'AI Marketing Revolution 2024',
-      thumbnail: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=600',
-      duration: '2:34',
-      views: 124500,
-      likes: 8920,
-      createdAt: '2 days ago',
-      category: 'Marketing'
-    },
-    {
-      id: '2',
-      title: 'Product Launch Announcement',
-      thumbnail: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=600',
-      duration: '1:45',
-      views: 89300,
-      likes: 5640,
-      createdAt: '5 days ago',
-      category: 'Business'
-    },
-    {
-      id: '3',
-      title: 'Tech Trends Explained Simply',
-      thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600',
-      duration: '3:12',
-      views: 156700,
-      likes: 12340,
-      createdAt: '1 week ago',
-      category: 'Education'
-    },
-    {
-      id: '4',
-      title: 'Social Media Growth Hacks',
-      thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=600',
-      duration: '2:58',
-      views: 203400,
-      likes: 15680,
-      createdAt: '1 week ago',
-      category: 'Social Media'
-    },
-    {
-      id: '5',
-      title: 'Brand Story: From Idea to Success',
-      thumbnail: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=600',
-      duration: '4:21',
-      views: 98200,
-      likes: 7230,
-      createdAt: '2 weeks ago',
-      category: 'Branding'
-    },
-    {
-      id: '6',
-      title: 'Creative Design Process 101',
-      thumbnail: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=600',
-      duration: '3:45',
-      views: 112300,
-      likes: 8940,
-      createdAt: '2 weeks ago',
-      category: 'Design'
-    },
-  ];
-
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
-  };
+  const currentColors = useMemo(() => 
+    isDarkMode ? colors.dark : colors.light,
+    [isDarkMode, colors]
+  );
 
   if (!isLoaded) {
-    return (
-      <div className={`min-h-screen bg-gradient-to-b ${currentColors.bg}`}></div>
-    );
+    return <div className={`min-h-screen bg-gradient-to-b ${currentColors.bg}`}></div>;
   }
 
   return (
     <div className={`min-h-screen bg-gradient-to-b ${currentColors.bg} ${currentColors.text} transition-colors duration-500`}>
-      {/* Animated Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div 
-          className="absolute w-96 h-96 rounded-full blur-3xl top-20 left-10 animate-blob transition-all duration-500" 
-          style={{background: isDarkMode ? 'rgba(77, 74, 255, 0.2)' : 'rgba(77, 74, 255, 0.1)'}}
-        ></div>
-        <div 
-          className="absolute w-96 h-96 rounded-full blur-3xl top-40 right-20 animate-blob animation-delay-2000 transition-all duration-500" 
-          style={{background: isDarkMode ? 'rgba(3, 0, 186, 0.2)' : 'rgba(3, 0, 186, 0.1)'}}
-        ></div>
-      </div>
-
       {/* Header */}
       <header className={`relative z-50 backdrop-blur-xl ${currentColors.navBg} border-b transition-all duration-500`} style={{borderColor: currentColors.navBorder}}>
         <nav className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <Image
-              src={isDarkMode ? '/logo-dark.svg' : '/logo-light.svg'}
-              alt="Somo Logo"
-              width={80}
-              height={40}
-              className="object-contain transition-opacity duration-300"
-            />
+            <div className="text-2xl font-bold" style={{color: '#4D4AFF'}}>Somo</div>
           </Link>
 
           <div className="flex items-center gap-3">
             <button 
               onClick={toggleTheme}
               className={`p-2 rounded-lg transition-all duration-300 hover:scale-110 ${isDarkMode ? 'bg-slate-900/50 hover:bg-slate-800' : 'bg-slate-200 hover:bg-slate-300'}`}
-              aria-label="Toggle theme"
             >
               {isDarkMode ? (
                 <Sun className="w-5 h-5 text-yellow-400" />
@@ -228,372 +268,193 @@ export default function ProfilePage() {
         </nav>
       </header>
 
-      {/* Banner Section */}
-      <section className="relative z-10 h-64 md:h-80 w-full overflow-hidden">
-        <div className="absolute inset-0 w-full h-full">
-          <img
-            src={userProfile.banner}
-            alt="Profile Banner"
-            className="w-full h-full object-cover"
-          />
-          <div className={`absolute inset-0 bg-gradient-to-b ${currentColors.bannerOverlay}`}></div>
-        </div>
+      {/* Banner */}
+      <section className="relative z-10 h-64 md:h-80 w-full overflow-hidden bg-slate-800">
+        {!loading && profile?.banner_url && (
+          <>
+            <img
+              src={profile.banner_url}
+              alt="Banner"
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+            <div className={`absolute inset-0 bg-gradient-to-b ${currentColors.bannerOverlay}`}></div>
+          </>
+        )}
+        
+        {loading && (
+          <div className="w-full h-full flex items-center justify-center">
+            <Loader className="w-8 h-8 animate-spin" style={{color: '#4D4AFF'}} />
+          </div>
+        )}
 
         {/* Banner Actions */}
         <div className="absolute top-6 right-6 flex gap-3 z-20">
-          <button 
-            className="p-2.5 rounded-lg backdrop-blur-xl border transition-all hover:scale-110"
-            style={{
-              background: isDarkMode ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.6)',
-              borderColor: currentColors.cardBorder
-            }}
-          >
+          <button className="p-2.5 rounded-lg backdrop-blur-xl border transition-all hover:scale-110"
+            style={{background: isDarkMode ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.6)', borderColor: currentColors.cardBorder}}>
             <Share2 className="w-5 h-5" />
           </button>
-          <button 
-            className="p-2.5 rounded-lg backdrop-blur-xl border transition-all hover:scale-110"
-            style={{
-              background: isDarkMode ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.6)',
-              borderColor: currentColors.cardBorder
-            }}
-          >
+          <button className="p-2.5 rounded-lg backdrop-blur-xl border transition-all hover:scale-110"
+            style={{background: isDarkMode ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.6)', borderColor: currentColors.cardBorder}}>
             <Settings className="w-5 h-5" />
           </button>
         </div>
       </section>
 
-      {/* Profile Info Section */}
+      {/* Profile Info */}
       <section className="relative z-20 max-w-7xl mx-auto px-6 -mt-20">
-        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-          {/* Avatar & Main Info */}
-          <div className="flex flex-col items-center md:items-start">
-            <div 
-              className="w-32 h-32 md:w-40 md:h-40 rounded-2xl border-4 flex items-center justify-center text-6xl md:text-7xl backdrop-blur-xl"
-              style={{
-                borderColor: isDarkMode ? '#0f172a' : '#ffffff',
-                background: currentColors.cardBg,
-                boxShadow: '0 20px 60px rgba(77, 74, 255, 0.3)'
-              }}
-            >
-              {userProfile.avatar}
-            </div>
-
-            <button 
-              className="mt-4 px-6 py-2.5 rounded-lg font-semibold text-white transition-all hover:shadow-xl"
-              style={{
-                background: 'linear-gradient(135deg, #4D4AFF, #0300BA)',
-                boxShadow: '0 10px 30px rgba(77, 74, 255, 0.3)'
-              }}
-            >
-              <Edit className="w-4 h-4 inline mr-2" />
-              Edit Profile
-            </button>
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader className="w-8 h-8 animate-spin" style={{color: '#4D4AFF'}} />
           </div>
+        ) : profile ? (
+          <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+            {/* Avatar */}
+            <div className="flex flex-col items-center md:items-start">
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-2xl border-4 flex items-center justify-center text-6xl md:text-7xl backdrop-blur-xl overflow-hidden"
+                style={{borderColor: isDarkMode ? '#0f172a' : '#ffffff', background: currentColors.cardBg, boxShadow: '0 20px 60px rgba(77, 74, 255, 0.3)'}}>
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" loading="lazy" />
+                ) : '👤'}
+              </div>
 
-          {/* User Details */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <h1 className={`text-3xl md:text-4xl font-black ${currentColors.text} mb-2`}>
-                {userProfile.name}
-              </h1>
-              <p className={`text-lg ${currentColors.textTertiary} mb-4`}>
-                {userProfile.username}
-              </p>
-              <p className={`${currentColors.textSecondary} text-base max-w-2xl leading-relaxed`}>
-                {userProfile.bio}
-              </p>
+              <button className="mt-4 px-6 py-2.5 rounded-lg font-semibold text-white transition-all hover:shadow-xl"
+                style={{background: 'linear-gradient(135deg, #4D4AFF, #0300BA)', boxShadow: '0 10px 30px rgba(77, 74, 255, 0.3)'}}>
+                <Edit className="w-4 h-4 inline mr-2" />
+                Edit Profile
+              </button>
             </div>
 
-            {/* Meta Info */}
-            <div className={`flex flex-wrap gap-4 ${currentColors.textTertiary} text-sm`}>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                <span>Joined {userProfile.joinDate}</span>
+            {/* Info */}
+            <div className="flex-1 space-y-4">
+              <div>
+                <h1 className={`text-3xl md:text-4xl font-black ${currentColors.text} mb-2`}>
+                  {profile.name || profile.full_name || 'User'}
+                </h1>
+                <p className={`text-lg ${currentColors.textTertiary} mb-4`}>
+                  {profile.username ? `@${profile.username}` : '@user'}
+                </p>
+                {profile.bio && <p className={`${currentColors.textSecondary}`}>{profile.bio}</p>}
               </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                <span>{userProfile.location}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Link2 className="w-4 h-4" />
-                <a href="#" className="hover:text-blue-500 transition-colors">{userProfile.website}</a>
-              </div>
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                <span>{userProfile.email}</span>
-              </div>
-            </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
-              {[
-                { label: 'Videos', value: userProfile.stats.videos, icon: Video },
-                { label: 'Views', value: userProfile.stats.totalViews, icon: Eye },
-                { label: 'Followers', value: userProfile.stats.followers, icon: Users },
-                { label: 'Likes', value: userProfile.stats.likes, icon: Heart },
-              ].map((stat, i) => (
-                <div 
-                  key={i}
-                  className="p-4 rounded-xl border backdrop-blur-xl transition-all "
-                  style={{
-                    background: currentColors.cardBg,
-                    borderColor: currentColors.cardBorder
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <stat.icon className="w-4 h-4" style={{color: '#4D4AFF'}} />
-                    <p className={`text-xs ${currentColors.textTertiary} uppercase tracking-wider`}>
-                      {stat.label}
-                    </p>
-                  </div>
-                  <p className={`text-2xl font-black ${currentColors.text}`}>
-                    {stat.value}
-                  </p>
+              {/* Meta */}
+              <div className={`flex flex-wrap gap-4 ${currentColors.textTertiary} text-sm`}>
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <span>Joined {formatJoinDate(profile.created_at)}</span>
                 </div>
-              ))}
+                {profile.location && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>{profile.location}</span></div>}
+                {profile.website && <div className="flex items-center gap-2"><Link2 className="w-4 h-4" /><a href={`https://${profile.website}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-500">{profile.website}</a></div>}
+              </div>
+
+              {/* Stats */}
+              {stats && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
+                  {[
+                    { label: 'Videos', value: stats.videos, icon: Video },
+                    { label: 'Views', value: formatNumber(stats.totalViews), icon: Eye },
+                    { label: 'Followers', value: formatNumber(stats.followers), icon: Users },
+                    { label: 'Likes', value: formatNumber(stats.likes), icon: Heart },
+                  ].map((stat, i) => (
+                    <div key={i} className="p-4 rounded-xl border backdrop-blur-xl"
+                      style={{background: currentColors.cardBg, borderColor: currentColors.cardBorder}}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <stat.icon className="w-4 h-4" style={{color: '#4D4AFF'}} />
+                        <p className={`text-xs ${currentColors.textTertiary} uppercase`}>{stat.label}</p>
+                      </div>
+                      <p className={`text-2xl font-black ${currentColors.text}`}>{stat.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
-      {/* Portfolio Section */}
+      {/* Videos */}
       <section className="relative z-10 max-w-7xl mx-auto px-6 py-16">
-        {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-            <h2 className={`text-3xl font-black ${currentColors.text} mb-2`}>
-              Video Portfolio
-            </h2>
-            <p className={currentColors.textTertiary}>
-              Explore my latest AI-generated video projects
-            </p>
+            <h2 className={`text-3xl font-black ${currentColors.text} mb-2`}>Video Portfolio</h2>
+            <p className={currentColors.textTertiary}>My latest projects</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* View Mode Toggle */}
-            <div className="flex gap-1 p-1 rounded-lg" style={{background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)'}}>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'text-white' : currentColors.textTertiary}`}
-                style={viewMode === 'grid' ? {background: 'linear-gradient(135deg, #4D4AFF, #0300BA)'} : {}}
-              >
-                <Grid3x3 className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'text-white' : currentColors.textTertiary}`}
-                style={viewMode === 'list' ? {background: 'linear-gradient(135deg, #4D4AFF, #0300BA)'} : {}}
-              >
-                <List className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          {[
-            { id: 'all', label: 'All Videos', icon: Video },
-            { id: 'trending', label: 'Trending', icon: TrendingUp },
-            { id: 'recent', label: 'Recent', icon: Clock },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all whitespace-nowrap flex items-center gap-2 ${
-                activeTab === tab.id ? 'text-white' : currentColors.textSecondary
-              }`}
-              style={
-                activeTab === tab.id
-                  ? {
-                      background: 'linear-gradient(135deg, #4D4AFF, #0300BA)',
-                      boxShadow: '0 8px 20px rgba(77, 74, 255, 0.3)'
-                    }
-                  : {
-                      background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)',
-                      borderColor: currentColors.cardBorder
-                    }
-              }
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
+          <div className="flex gap-1 p-1 rounded-lg" style={{background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)'}}>
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg ${viewMode === 'grid' ? 'text-white' : currentColors.textTertiary}`}
+              style={viewMode === 'grid' ? {background: 'linear-gradient(135deg, #4D4AFF, #0300BA)'} : {}}>
+              <Grid3x3 className="w-5 h-5" />
             </button>
-          ))}
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'text-white' : currentColors.textTertiary}`}
+              style={viewMode === 'list' ? {background: 'linear-gradient(135deg, #4D4AFF, #0300BA)'} : {}}>
+              <List className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Videos Grid */}
-        <div className={viewMode === 'grid' ? 'grid md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-          {videoProjects.map((video, i) => (
-            <div
-              key={video.id}
-              className={`group rounded-xl border backdrop-blur-xl overflow-hidden transition-all duration-300 animate-fade-in ${
-                viewMode === 'list' ? 'flex gap-4' : ''
-              }`}
-              style={{
-                background: currentColors.cardBg,
-                borderColor: currentColors.cardBorder,
-                animationDelay: `${i * 0.1}s`
-              }}
-            >
-              {/* Thumbnail */}
-              <div className={`relative overflow-hidden ${viewMode === 'list' ? 'w-64 flex-shrink-0' : 'aspect-video'}`}>
-                <img
-                  src={video.thumbnail}
-                  alt={video.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-                
-                {/* Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <button className="w-14 h-14 rounded-full flex items-center justify-center text-white transform scale-75 group-hover:scale-100 transition-transform" style={{background: 'linear-gradient(135deg, #4D4AFF, #0300BA)'}}>
-                      <Play className="w-6 h-6 ml-1" fill="white" />
-                    </button>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader className="w-8 h-8 animate-spin" style={{color: '#4D4AFF'}} />
+          </div>
+        ) : videos.length > 0 ? (
+          <>
+            <div className={viewMode === 'grid' ? 'grid md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
+              {videos.slice(0, visibleVideos).map(video => (
+                <div key={video.id} className="group rounded-xl border backdrop-blur-xl overflow-hidden" style={{background: currentColors.cardBg, borderColor: currentColors.cardBorder}}>
+                  <div className="relative overflow-hidden aspect-video">
+                    <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <button className="w-14 h-14 rounded-full flex items-center justify-center text-white" style={{background: 'linear-gradient(135deg, #4D4AFF, #0300BA)'}}>
+                        <Play className="w-6 h-6 ml-1" fill="white" />
+                      </button>
+                    </div>
+                    <div className="absolute top-3 right-3 px-2 py-1 rounded-lg text-xs font-bold text-white" style={{background: 'rgba(0, 0, 0, 0.6)'}}>
+                      {video.duration}
+                    </div>
+                  </div>
+
+                  <div className="p-4">
+                    <h3 className={`text-lg font-bold ${currentColors.text} mb-2`}>{video.title}</h3>
+                    <div className={`flex items-center gap-4 text-sm ${currentColors.textTertiary} mb-3`}>
+                      <div className="flex items-center gap-1"><Eye className="w-4 h-4" /><span>{formatNumber(video.views)}</span></div>
+                      <div className="flex items-center gap-1"><Heart className="w-4 h-4" /><span>{formatNumber(video.likes)}</span></div>
+                      <div className="flex items-center gap-1"><Clock className="w-4 h-4" /><span>{video.createdAt}</span></div>
+                    </div>
                   </div>
                 </div>
-
-                {/* Duration Badge */}
-                <div className="absolute top-3 right-3 px-2 py-1 rounded-lg text-xs font-bold text-white backdrop-blur-xl" style={{background: 'rgba(0, 0, 0, 0.6)'}}>
-                  {video.duration}
-                </div>
-
-                {/* Category Badge */}
-                <div className="absolute top-3 left-3 px-3 py-1 rounded-lg text-xs font-semibold text-white backdrop-blur-xl" style={{background: 'linear-gradient(135deg, rgba(77, 74, 255, 0.8), rgba(3, 0, 186, 0.8))'}}>
-                  {video.category}
-                </div>
-              </div>
-
-              {/* Video Info */}
-              <div className="p-4 flex-1">
-                <h3 className={`text-lg font-bold ${currentColors.text} mb-2 line-clamp-2 group-hover:text-blue-500 transition-colors`}>
-                  {video.title}
-                </h3>
-
-                <div className={`flex items-center gap-4 text-sm ${currentColors.textTertiary} mb-3`}>
-                  <div className="flex items-center gap-1">
-                    <Eye className="w-4 h-4" />
-                    <span>{formatNumber(video.views)}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Heart className="w-4 h-4" />
-                    <span>{formatNumber(video.likes)}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    <span>{video.createdAt}</span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button 
-                    className="flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all hover:shadow-lg flex items-center justify-center gap-2"
-                    style={{
-                      background: 'linear-gradient(135deg, #4D4AFF, #0300BA)',
-                      color: 'white'
-                    }}
-                  >
-                    <Play className="w-4 h-4" />
-                    Play
-                  </button>
-                  <button 
-                    className="p-2 rounded-lg transition-all hover:scale-110"
-                    style={{
-                      background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)',
-                      borderColor: currentColors.cardBorder
-                    }}
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
-                  <button 
-                    className="p-2 rounded-lg transition-all hover:scale-110"
-                    style={{
-                      background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)',
-                      borderColor: currentColors.cardBorder
-                    }}
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Load More Button */}
-        <div className="flex justify-center mt-12">
-          <button 
-            className="px-8 py-3 rounded-lg font-bold transition-all hover:shadow-xl"
-            style={{
-              background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)',
-              borderColor: currentColors.cardBorder,
-              color: '#4D4AFF'
-            }}
-          >
-            Load More Videos
-          </button>
-        </div>
+            {visibleVideos < videos.length && (
+              <div className="flex justify-center mt-8">
+                <button onClick={handleLoadMore} className="px-8 py-3 rounded-lg font-bold" style={{background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)', color: '#4D4AFF'}}>
+                  Load More Videos
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <Video className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p className={currentColors.textTertiary}>No videos yet</p>
+          </div>
+        )}
       </section>
 
       {/* Footer */}
-      <footer className={`relative z-10 border-t backdrop-blur-xl ${isDarkMode ? 'bg-slate-950/80' : 'bg-slate-50'} transition-colors duration-500 mt-20`} style={{borderColor: currentColors.navBorder}}>
+      <footer className={`relative z-10 border-t backdrop-blur-xl ${isDarkMode ? 'bg-slate-950/80' : 'bg-slate-50'} mt-20`} style={{borderColor: currentColors.navBorder}}>
         <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <p className={`${currentColors.textTertiary} text-sm`}>
-              © 2024 Somo. All rights reserved.
-            </p>
-            
-            <div className={`flex gap-6 text-sm ${currentColors.textTertiary}`}>
-              <a href="#" className={`hover:${isDarkMode ? 'text-white' : 'text-slate-900'} transition-colors`}>Privacy</a>
-              <a href="#" className={`hover:${isDarkMode ? 'text-white' : 'text-slate-900'} transition-colors`}>Terms</a>
-              <a href="#" className={`hover:${isDarkMode ? 'text-white' : 'text-slate-900'} transition-colors`}>Help</a>
-            </div>
-          </div>
+          <p className={`${currentColors.textTertiary} text-sm`}>© 2024 Somo. All rights reserved.</p>
         </div>
       </footer>
 
       <style jsx>{`
-        @keyframes blob {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
-
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-out forwards;
-          opacity: 0;
-        }
-
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
+        .animate-spin {
+          animation: spin 1s linear infinite;
         }
       `}</style>
     </div>

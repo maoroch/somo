@@ -150,7 +150,7 @@ export default function SignUpPage() {
         }, 3000);
       } else if (data?.session) {
         // Пользователь сразу авторизован (если подтверждение отключено)
-        router.push('/dashboard');
+        router.push('/profile');
       }
 
     } catch (err: any) {
