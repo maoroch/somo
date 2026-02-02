@@ -225,13 +225,6 @@ export default function SignInPage() {
               <p className={`text-sm ${currentColors.textTertiary}`}>Sign in to your account and continue creating amazing videos</p>
             </div>
 
-            {/* Debug Info - можно удалить после отладки */}
-            <div className="mb-4 p-3 rounded-lg bg-blue-950/20 border border-blue-800/30 text-blue-300 text-xs">
-              <p className="font-semibold mb-1">Debug Info:</p>
-              <p>Password valid: {isPasswordValid ? '✓' : '✗'}</p>
-              <p>Can submit: {canSubmit ? '✓' : '✗'}</p>
-            </div>
-
             {/* Error/Success Messages */}
             {error && (
               <div className={`mb-6 p-4 rounded-lg border animate-fade-in ${
@@ -377,26 +370,16 @@ export default function SignInPage() {
             </div>
 
             {/* Social Sign In */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex">
               <button
                 type="button"
-                className={`py-2.5 rounded-lg border-2 transition-all duration-300 font-medium text-sm flex items-center justify-center gap-2 hover:scale-105 active:scale-95`}
+                className={`py-2.5 rounded-lg w-full border-2 transition-all duration-300 font-medium text-sm flex items-center justify-center gap-2 hover:scale-105 active:scale-95`}
                 style={{
                   borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
                   backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
                 }}
               >
                 <span className="text-lg">Google</span>
-              </button>
-              <button
-                type="button"
-                className={`py-2.5 rounded-lg border-2 transition-all duration-300 font-medium text-sm flex items-center justify-center gap-2 hover:scale-105 active:scale-95`}
-                style={{
-                  borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                  backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-                }}
-              >
-                <span className="text-lg">GitHub</span>
               </button>
             </div>
 

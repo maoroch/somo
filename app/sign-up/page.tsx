@@ -40,9 +40,9 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('Salimovilas46@gmail.com');
-  const [password, setPassword] = useState('Test123!@#');
-  const [confirmPassword, setConfirmPassword] = useState('Test123!@#');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -239,13 +239,6 @@ export default function SignUpPage() {
               <p className={`text-sm ${currentColors.textTertiary}`}>Create your account and start creating amazing videos</p>
             </div>
 
-            {/* Debug Info - можно удалить после отладки */}
-            <div className="mb-4 p-3 rounded-lg bg-blue-950/20 border border-blue-800/30 text-blue-300 text-xs">
-              <p className="font-semibold mb-1">Debug Info:</p>
-              <p>Password valid: {isPasswordValid ? '✓' : '✗'}</p>
-              <p>Passwords match: {passwordsMatch ? '✓' : '✗'}</p>
-              <p>Can submit: {canSubmit ? '✓' : '✗'}</p>
-            </div>
 
             {/* Error/Success Messages */}
             {error && (
@@ -466,12 +459,6 @@ export default function SignUpPage() {
               </Link>
             </p>
 
-            {/* Test Credentials - можно удалить после отладки */}
-            <div className="mt-6 p-3 rounded-lg bg-slate-800/20 border border-slate-700/30">
-              <p className="text-xs text-slate-400 mb-1">Test credentials (auto-filled):</p>
-              <p className="text-xs text-slate-300">Email: {email}</p>
-              <p className="text-xs text-slate-300">Password: Test123!@#</p>
-            </div>
           </div>
 
           {/* Bottom Info */}
