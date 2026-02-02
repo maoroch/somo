@@ -68,8 +68,7 @@ export interface VideoElement extends BaseCanvasElement {
   muted?: boolean;
 }
 
-// Объединенный тип для всех элементов
-export type CanvasElement = TextElement | ImageElement | FrameElement | VideoElement;
 
-// Тип для создания нового элемента
+// Объединенный тип для всех элементов
+export type CanvasElement = TextElement | ImageElement | VideoElement | FrameElement;
 export type ElementType = CanvasElement['type'];
