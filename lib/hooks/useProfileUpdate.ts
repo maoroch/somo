@@ -1,3 +1,4 @@
+'use client';
 // lib/hooks/useProfileUpdate.ts
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';

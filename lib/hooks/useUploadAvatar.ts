@@ -1,4 +1,4 @@
-
+'use client';
 // lib/hooks/useUploadAvatar.ts
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';

@@ -1,4 +1,4 @@
-
+'use client';
 // lib/hooks/useVideoProjects.ts
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';

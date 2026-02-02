@@ -1,3 +1,4 @@
+'use client';
 // lib/hooks/useInitializeUserStats.ts
 // Этот хук автоматически создаёт запись в user_stats если её нет
 import { useEffect } from 'react';
