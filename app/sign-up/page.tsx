@@ -1,8 +1,10 @@
 'use client';
 import Image from 'next/image';
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Moon, Sun, Sparkles, Check } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Moon, Sun, Sparkles, Check, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 // Утилиты для работы с темой
 const THEME_STORAGE_KEY = 'somo-theme-preference';
@@ -38,11 +40,14 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState('Salimovilas46@gmail.com');
+  const [password, setPassword] = useState('Test123!@#');
+  const [confirmPassword, setConfirmPassword] = useState('Test123!@#');
   const [isLoading, setIsLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   // Инициализация темы при монтировании
   useEffect(() => {
@@ -50,6 +55,11 @@ export default function SignUpPage() {
     setIsDarkMode(initialTheme === 'dark');
     setIsLoaded(true);
   }, []);
+
+  // Очистка ошибок при изменении полей
+  useEffect(() => {
+    if (error) setError(null);
+  }, [fullName, email, password, confirmPassword]);
 
   const toggleTheme = () => {
     const newIsDark = !isDarkMode;
@@ -92,10 +102,63 @@ export default function SignUpPage() {
     if (!canSubmit) return;
     
     setIsLoading(true);
-    setTimeout(() => {
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const supabase = createClient();
+      
+      // Валидация email на клиенте
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      console.log('Attempting to sign up with:', { email, passwordLength: password.length });
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            avatar_url: ''  // Или URL, если есть
+          }
+        }
+      });
+
+      if (signUpError) {
+        console.error('Supabase signup error details:', signUpError);
+        
+        if (signUpError.message.includes('User already registered')) {
+          throw new Error('This email is already registered. Please sign in instead.');
+        } else if (signUpError.status === 429) {
+          throw new Error('Too many requests. Please try again later.');
+        } else {
+          throw new Error(signUpError.message || 'Registration failed. Please try again.');
+        }
+      }
+
+      // Показываем успех и редиректим
+      setSuccess(true);
+
+      // Проверяем, отправлено ли письмо с подтверждением
+      if (data?.user && !data?.session) {
+        // Email confirmation required
+        setTimeout(() => {
+          router.push('/sign-in?message=Check your email to confirm your account');
+        }, 3000);
+      } else if (data?.session) {
+        // Пользователь сразу авторизован (если подтверждение отключено)
+        router.push('/dashboard');
+      }
+
+    } catch (err: any) {
+      console.error('Sign up error:', err);
+      setError(err.message || 'An unexpected error occurred. Please try again.');
+    } finally {
       setIsLoading(false);
-      alert('Account created! Check your email to verify.');
-    }, 1500);
+    }
   };
 
   // Избегаем мерцания при первой загрузке
@@ -175,6 +238,49 @@ export default function SignUpPage() {
               <h1 className={`text-3xl font-black mb-2 ${currentColors.text}`}>Get Started</h1>
               <p className={`text-sm ${currentColors.textTertiary}`}>Create your account and start creating amazing videos</p>
             </div>
+
+            {/* Debug Info - можно удалить после отладки */}
+            <div className="mb-4 p-3 rounded-lg bg-blue-950/20 border border-blue-800/30 text-blue-300 text-xs">
+              <p className="font-semibold mb-1">Debug Info:</p>
+              <p>Password valid: {isPasswordValid ? '✓' : '✗'}</p>
+              <p>Passwords match: {passwordsMatch ? '✓' : '✗'}</p>
+              <p>Can submit: {canSubmit ? '✓' : '✗'}</p>
+            </div>
+
+            {/* Error/Success Messages */}
+            {error && (
+              <div className={`mb-6 p-4 rounded-lg border animate-fade-in ${
+                isDarkMode 
+                  ? 'bg-red-950/20 border-red-800/50 text-red-300' 
+                  : 'bg-red-50 border-red-200 text-red-700'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Registration Failed</p>
+                    <p className="text-sm opacity-90">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {success && (
+              <div className={`mb-6 p-4 rounded-lg border animate-fade-in ${
+                isDarkMode 
+                  ? 'bg-emerald-950/20 border-emerald-800/50 text-emerald-300' 
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <Check className="w-5 h-5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Account created successfully!</p>
+                    <p className="text-sm opacity-90">
+                      Please check your email to verify your account. You'll be redirected to sign in shortly.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleSignUp} className="space-y-4 animate-fade-in animation-delay-200">
@@ -359,6 +465,13 @@ export default function SignUpPage() {
                 Sign in
               </Link>
             </p>
+
+            {/* Test Credentials - можно удалить после отладки */}
+            <div className="mt-6 p-3 rounded-lg bg-slate-800/20 border border-slate-700/30">
+              <p className="text-xs text-slate-400 mb-1">Test credentials (auto-filled):</p>
+              <p className="text-xs text-slate-300">Email: {email}</p>
+              <p className="text-xs text-slate-300">Password: Test123!@#</p>
+            </div>
           </div>
 
           {/* Bottom Info */}

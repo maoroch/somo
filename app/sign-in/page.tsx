@@ -1,8 +1,10 @@
 'use client';
 import Image from 'next/image';
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Moon, Sun, Sparkles } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Moon, Sun, Sparkles, Check, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 // Утилиты для работы с темой
 const THEME_STORAGE_KEY = 'somo-theme-preference';
@@ -39,6 +41,9 @@ export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   // Инициализация темы при монтировании
   useEffect(() => {
@@ -46,6 +51,11 @@ export default function SignInPage() {
     setIsDarkMode(initialTheme === 'dark');
     setIsLoaded(true);
   }, []);
+
+  // Очистка ошибок при изменении полей
+  useEffect(() => {
+    if (error) setError(null);
+  }, [email, password]);
 
   const toggleTheme = () => {
     const newIsDark = !isDarkMode;
@@ -71,13 +81,70 @@ export default function SignInPage() {
 
   const currentColors = isDarkMode ? colors.dark : colors.light;
 
+  // Password requirements (для UI, хотя для sign-in не критичны)
+  const requirements = [
+    { label: 'At least 8 characters', check: password.length >= 8 },
+    { label: 'One uppercase letter', check: /[A-Z]/.test(password) },
+    { label: 'One number', check: /\d/.test(password) },
+    { label: 'One special character', check: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
+  ];
+
+  const isPasswordValid = requirements.every(r => r.check);
+  const canSubmit = !!email && !!password;
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit) return;
+    
     setIsLoading(true);
-    setTimeout(() => {
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const supabase = createClient();
+      
+      // Валидация email на клиенте
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      console.log('Attempting to sign in with:', { email, passwordLength: password.length });
+
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
+
+      if (signInError) {
+        console.error('Supabase signin error details:', signInError);
+        
+        // Детальная обработка ошибок
+        if (signInError.message.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password. Please try again.');
+        } else if (signInError.message.includes('Email not confirmed')) {
+          throw new Error('Please confirm your email before signing in.');
+        } else if (signInError.status === 429) {
+          throw new Error('Too many requests. Please try again later.');
+        } else {
+          throw new Error(signInError.message || 'Sign in failed. Please try again.');
+        }
+      }
+
+      // Если успешно, редирект
+      if (data?.session) {
+        setSuccess(true);
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+      }
+
+    } catch (err: any) {
+      console.error('Sign in error:', err);
+      setError(err.message || 'An unexpected error occurred. Please try again.');
+    } finally {
       setIsLoading(false);
-      alert('Welcome back!');
-    }, 1500);
+    }
   };
 
   // Избегаем мерцания при первой загрузке
@@ -158,6 +225,46 @@ export default function SignInPage() {
               <p className={`text-sm ${currentColors.textTertiary}`}>Sign in to your account and continue creating amazing videos</p>
             </div>
 
+            {/* Debug Info - можно удалить после отладки */}
+            <div className="mb-4 p-3 rounded-lg bg-blue-950/20 border border-blue-800/30 text-blue-300 text-xs">
+              <p className="font-semibold mb-1">Debug Info:</p>
+              <p>Password valid: {isPasswordValid ? '✓' : '✗'}</p>
+              <p>Can submit: {canSubmit ? '✓' : '✗'}</p>
+            </div>
+
+            {/* Error/Success Messages */}
+            {error && (
+              <div className={`mb-6 p-4 rounded-lg border animate-fade-in ${
+                isDarkMode 
+                  ? 'bg-red-950/20 border-red-800/50 text-red-300' 
+                  : 'bg-red-50 border-red-200 text-red-700'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Sign In Failed</p>
+                    <p className="text-sm opacity-90">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {success && (
+              <div className={`mb-6 p-4 rounded-lg border animate-fade-in ${
+                isDarkMode 
+                  ? 'bg-emerald-950/20 border-emerald-800/50 text-emerald-300' 
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <Check className="w-5 h-5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Signed in successfully!</p>
+                    <p className="text-sm opacity-90">Redirecting to dashboard...</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Form */}
             <form onSubmit={handleSignIn} className="space-y-4 animate-fade-in animation-delay-200">
               {/* Email Input */}
@@ -224,12 +331,26 @@ export default function SignInPage() {
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
+
+                {/* Password Requirements - опционально для подсказки */}
+                <div className="mt-3 space-y-2 p-4 rounded-lg" style={{background: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'}}>
+                  {requirements.map((req, i) => (
+                    <div key={i} className="flex items-center gap-2.5 text-xs">
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-all duration-300 ${req.check ? 'bg-emerald-500' : isDarkMode ? 'bg-slate-700' : 'bg-slate-300'}`}>
+                        {req.check && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <span className={`transition-colors duration-300 ${req.check ? 'text-emerald-400' : currentColors.textTertiary}`}>
+                        {req.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Sign In Button */}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !canSubmit}
                 className="w-full py-3 rounded-lg font-bold text-white transition-all duration-300 flex items-center justify-center gap-2 group hover:shadow-2xl disabled:opacity-70 mt-8 text-base relative overflow-hidden"
                 style={{
                   background: 'linear-gradient(135deg, #4D4AFF, #0300BA)',
