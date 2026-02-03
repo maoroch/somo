@@ -2,8 +2,9 @@
 'use client';
 
 import React, { memo } from 'react';
-import { CanvasElement, FrameElement } from './Types';
+import { CanvasElement, FrameElement, TextElement, ImageElement, VideoElement } from './Types';
 import { FrameTool } from './tools/FrameTool';
+import { TextTool } from './tools/TextTool';
 
 interface CanvasElementRendererProps {
   element: CanvasElement;
@@ -24,6 +25,7 @@ const CanvasElementRenderer: React.FC<CanvasElementRendererProps> = ({
   zoom,
   onSelect,
   onUpdate,
+  elementId,
   autoOpenPopup = false,
   onOpenPopup
 }) => {
@@ -44,50 +46,15 @@ const CanvasElementRenderer: React.FC<CanvasElementRendererProps> = ({
     
     case 'text':
       return (
-        <div
-          className="absolute"
-          style={{
-            left: element.x,
-            top: element.y,
-            width: element.width,
-            height: element.height,
-            transform: `rotate(${element.rotation || 0}deg)`,
-            opacity: element.opacity || 1,
-            cursor: 'grab',
-            userSelect: 'none',
-            display: element.visible === false ? 'none' : 'block'
-          }}
-          onMouseDown={(e) => {
-            if (e.button === 0) {
-              onSelect(element.id);
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div
-            className="w-full h-full p-2 break-words"
-            style={{
-              fontSize: element.fontSize,
-              fontFamily: element.fontFamily,
-              color: element.color,
-              textAlign: element.textAlign || 'left',
-              lineHeight: element.lineHeight || 1.5,
-              fontWeight: element.fontWeight || 'normal'
-            }}
-          >
-            {element.content || 'Double click to edit'}
-          </div>
-          
-          {isSelected && (
-            <div
-              className="absolute inset-0 border-2 pointer-events-none"
-              style={{ 
-                borderColor: '#4D4AFF', 
-                margin: '-2px' 
-              }}
-            />
-          )}
-        </div>
+        <TextTool
+          element={element as TextElement}
+          isSelected={isSelected}
+          isDarkMode={isDarkMode}
+          zoom={zoom}
+          onSelect={onSelect}
+          onUpdate={onUpdate}
+          elementId={elementId}
+        />
       );
     
     case 'image':

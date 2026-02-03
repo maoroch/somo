@@ -1,3 +1,4 @@
+// tools/TextTool.tsx
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { TextElement } from '../Types';
 
@@ -30,24 +31,37 @@ export const TextTool: React.FC<TextToolProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ АВТОМАТИЧЕСКИ ВХОДИМ В РЕДАКТИРОВАНИЕ ЕСЛИ ТОЛЬКО ЧТО СОЗДАН
+  // Автоматически входим в редактирование если элемент только что создан и выбран
   useEffect(() => {
-    if (isSelected && isEditing && textareaRef.current) {
+    // Проверяем, является ли это новый текстовый элемент (можно добавить флаг в элемент)
+    if (isSelected && !isEditing && textareaRef.current && !element.content) {
+      setIsEditing(true);
+    }
+  }, [isSelected, isEditing, element.content]);
+
+  // Фокус на textarea при входе в режим редактирования
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.select();
     }
-  }, [isEditing, isSelected]);
+  }, [isEditing]);
 
-  // ✅ АВТО-РАЗМЕР TEXTAREA ПРИ ВВОДЕ
+  // Авто-размер textarea при вводе
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      textarea.style.height = `${textarea.scrollHeight}px`;
-      onUpdate({
-        ...element,
-        height: textarea.scrollHeight,
-      });
+      const newHeight = textarea.scrollHeight;
+      textarea.style.height = `${newHeight}px`;
+      
+      // Обновляем высоту элемента, если она изменилась
+      if (Math.abs(newHeight - element.height) > 10) {
+        onUpdate({
+          ...element,
+          height: newHeight,
+        });
+      }
     }
   }, [element, onUpdate]);
 
@@ -55,15 +69,15 @@ export const TextTool: React.FC<TextToolProps> = ({
     if (isEditing) {
       adjustTextareaHeight();
     }
-  }, [isEditing, adjustTextareaHeight]);
+  }, [isEditing, element.content, adjustTextareaHeight]);
 
-  // ✅ ОБРАБОТЧИК ДВОЙНОГО КЛИКА ДЛЯ РЕДАКТИРОВАНИЯ
+  // Обработчик двойного клика для редактирования
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setIsEditing(true);
   }, []);
 
-  // ✅ ОБРАБОТЧИК MOUSE DOWN ДЛЯ ПЕРЕМЕЩЕНИЯ
+  // Обработчик mouse down для перемещения
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     // Если в режиме редактирования - пропускаем
     if (isEditing) return;
@@ -72,12 +86,15 @@ export const TextTool: React.FC<TextToolProps> = ({
       e.stopPropagation();
       onSelect(element.id);
       
-      // Только если не в режиме редактирования, начинаем тащить
-      setIsDragging(true);
-      setDragStart({
-        x: e.clientX - element.x * (zoom / 100),
-        y: e.clientY - element.y * (zoom / 100)
-      });
+      // Если мы не кликнули на сам текст (например, на пустое место в элементе)
+      // или зажали Ctrl/Cmd - начинаем перетаскивание
+      if (!e.currentTarget.querySelector('textarea')?.contains(e.target as Node)) {
+        setIsDragging(true);
+        setDragStart({
+          x: e.clientX - element.x * (zoom / 100),
+          y: e.clientY - element.y * (zoom / 100)
+        });
+      }
     }
   }, [element.id, element.x, element.y, isEditing, onSelect, zoom]);
 
@@ -130,9 +147,10 @@ export const TextTool: React.FC<TextToolProps> = ({
     setResizeDirection(null);
   }, []);
 
-  // ✅ ОБРАБОТЧИК ДЛЯ НАЧАЛА РЕСАЙЗА
+  // Обработчик для начала ресайза
   const handleResizeMouseDown = useCallback((e: React.MouseEvent, direction: string) => {
     e.stopPropagation();
+    e.preventDefault();
     onSelect(element.id);
     setIsResizing(true);
     setResizeDirection(direction);
@@ -168,6 +186,14 @@ export const TextTool: React.FC<TextToolProps> = ({
     }
   }, []);
 
+  // Обработчик клика по самому тексту для начала редактирования
+  const handleTextClick = useCallback((e: React.MouseEvent) => {
+    if (!isEditing) {
+      e.stopPropagation();
+      setIsEditing(true);
+    }
+  }, [isEditing]);
+
   return (
     <div
       ref={containerRef}
@@ -178,9 +204,9 @@ export const TextTool: React.FC<TextToolProps> = ({
         top: element.y,
         width: element.width,
         height: element.height,
-        transform: `rotate(${element.rotation}deg)`,
-        opacity: element.opacity,
-        cursor: isDragging || isResizing ? 'grabbing' : isEditing ? 'text' : 'grab',
+        transform: `rotate(${element.rotation || 0}deg)`,
+        opacity: element.opacity || 1,
+        cursor: isDragging || isResizing ? 'grabbing' : (isEditing ? 'text' : 'grab'),
         willChange: isDragging || isResizing ? 'transform' : 'auto',
         pointerEvents: element.locked ? 'none' : 'auto',
         display: element.visible === false ? 'none' : 'block'
@@ -204,7 +230,7 @@ export const TextTool: React.FC<TextToolProps> = ({
           {['nw', 'ne', 'sw', 'se'].map(corner => (
             <div
               key={corner}
-              className="absolute w-3 h-3 bg-white border-2 rounded-full pointer-events-auto cursor-nwse-resize hover:scale-125 transition-transform"
+              className="absolute w-3 h-3 bg-white border-2 rounded-full pointer-events-auto hover:scale-125 transition-transform z-10"
               style={{
                 borderColor: '#4D4AFF',
                 cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize',
@@ -225,28 +251,31 @@ export const TextTool: React.FC<TextToolProps> = ({
           onChange={handleTextChange}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          className="w-full min-h-full p-2 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-500 overflow-hidden"
+          className="w-full min-h-full p-2 bg-white/80 dark:bg-gray-800/80 border-none outline-none resize-none focus:ring-2 focus:ring-blue-500 overflow-hidden rounded"
           style={{
             fontSize: element.fontSize,
             fontFamily: element.fontFamily,
             fontWeight: element.fontWeight,
             color: element.color,
-            textAlign: element.textAlign,
-            lineHeight: element.lineHeight
+            textAlign: element.textAlign as any,
+            lineHeight: element.lineHeight,
+            minHeight: '100%'
           }}
           autoFocus
+          onClick={(e) => e.stopPropagation()}
         />
       ) : (
         <div
-          className="w-full h-full p-2 break-words overflow-hidden whitespace-pre-wrap"
+          className="w-full h-full p-2 break-words overflow-hidden whitespace-pre-wrap cursor-text select-text"
           style={{
             fontSize: element.fontSize,
             fontFamily: element.fontFamily,
             fontWeight: element.fontWeight,
             color: element.color,
-            textAlign: element.textAlign,
+            textAlign: element.textAlign as any,
             lineHeight: element.lineHeight
           }}
+          onClick={handleTextClick}
         >
           {element.content || 'Double click to edit'}
         </div>
