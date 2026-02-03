@@ -1,6 +1,5 @@
 'use client';
 import Link from 'next/link';
-import Image from 'next/image';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Settings, 
@@ -17,16 +16,16 @@ import {
   Edit,
   Grid3x3,
   List,
-  TrendingUp,
   Users,
   Video,
   Clock,
-  Download,
-  MoreHorizontal,
-  Loader
+  Loader,
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { getInitialTheme, saveTheme, type Theme } from '@/lib/theme-utils';
-import { createClient } from '@/lib/supabase/client';
+import { useProfileWithCache, useUserStatsWithCache, useVideoProjectsWithCache } from '@/lib/hooks';
+import { cacheManager } from '@/lib/cache/cacheManager';
 
 const PAGE_SIZE = 6;
 
@@ -34,144 +33,19 @@ export default function ProfilePage() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [activeTab, setActiveTab] = useState<'all' | 'trending' | 'recent'>('all');
-  
-  // Состояние для данных
-  const [profile, setProfile] = useState<any>(null);
-  const [stats, setStats] = useState<any>(null);
-  const [videos, setVideos] = useState<any[]>([]);
-  const [visibleVideos, setVisibleVideos] = useState(PAGE_SIZE);
-  
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [showCacheStats, setShowCacheStats] = useState(false);
+
+  // ✅ ИСПОЛЬЗУЕМ ХУКИ С КЕШЕМ!
+  const { profile, loading: profileLoading, refetch: refetchProfile, clearCache: clearProfileCache } = useProfileWithCache();
+  const { stats, loading: statsLoading, refetch: refetchStats, clearCache: clearStatsCache } = useUserStatsWithCache();
+  const { videos, loading: videosLoading, hasMore, loadMore, refetch: refetchVideos, clearCache: clearVideosCache } = useVideoProjectsWithCache();
 
   // Инициализация темы
   useEffect(() => {
-    const initialTheme = getInitialTheme();
-    setIsDarkMode(initialTheme === 'dark');
+    const theme = getInitialTheme();
+    setIsDarkMode(theme === 'dark');
     setIsLoaded(true);
   }, []);
-
-  // Загрузка ВСЕХ данных одним запросом (оптимизировано)
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    const fetchAllData = async () => {
-      try {
-        setLoading(true);
-        const supabase = createClient();
-
-        // Получаем текущего пользователя
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
-        if (authError || !user) {
-          setError('User not authenticated');
-          setLoading(false);
-          return;
-        }
-
-        // Загружаем ВСЕ данные параллельно (не последовательно!)
-        const [profileRes, statsRes, videosRes] = await Promise.all([
-          // Профиль
-          supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single(),
-          
-          // Статистика
-          supabase
-            .from('user_stats')
-            .select('videos, total_views, followers, likes')
-            .eq('user_id', user.id)
-            .single(),
-          
-          // Видео (только первые PAGE_SIZE для быстрой загрузки)
-          supabase
-            .from('video_projects')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(PAGE_SIZE)
-        ]);
-
-        // Обрабатываем профиль
-        if (profileRes.data) {
-          setProfile(profileRes.data);
-        } else if (profileRes.error) {
-          console.error('Profile error:', profileRes.error);
-        }
-
-        // Обрабатываем статистику
-        if (statsRes.data) {
-          setStats({
-            videos: statsRes.data.videos || 0,
-            totalViews: statsRes.data.total_views || 0,
-            followers: statsRes.data.followers || 0,
-            likes: statsRes.data.likes || 0
-          });
-        }
-
-        // Обрабатываем видео
-        if (videosRes.data) {
-          setVideos(videosRes.data.map(v => ({
-            id: v.id,
-            title: v.title,
-            thumbnail: v.thumbnail_url,
-            duration: v.duration || '0:00',
-            views: v.views || 0,
-            likes: v.likes || 0,
-            createdAt: formatDate(v.created_at),
-            category: v.category || 'Uncategorized'
-          })));
-        }
-
-        setError(null);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error loading data:', err);
-        setError('Failed to load data');
-        setLoading(false);
-      }
-    };
-
-    fetchAllData();
-  }, [isLoaded]);
-
-  // Загрузка ещё видео при нажатии "Load More"
-  const handleLoadMore = useCallback(async () => {
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return;
-
-      const { data: moreVideos } = await supabase
-        .from('video_projects')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(visibleVideos, visibleVideos + PAGE_SIZE - 1);
-
-      if (moreVideos) {
-        const formattedVideos = moreVideos.map(v => ({
-          id: v.id,
-          title: v.title,
-          thumbnail: v.thumbnail_url,
-          duration: v.duration || '0:00',
-          views: v.views || 0,
-          likes: v.likes || 0,
-          createdAt: formatDate(v.created_at),
-          category: v.category || 'Uncategorized'
-        }));
-        
-        setVideos(prev => [...prev, ...formattedVideos]);
-        setVisibleVideos(prev => prev + PAGE_SIZE);
-      }
-    } catch (err) {
-      console.error('Error loading more videos:', err);
-    }
-  }, [visibleVideos]);
 
   const toggleTheme = useCallback(() => {
     const newTheme: Theme = isDarkMode ? 'light' : 'dark';
@@ -179,23 +53,31 @@ export default function ProfilePage() {
     saveTheme(newTheme);
   }, [isDarkMode]);
 
+  // Обновить все данные с очисткой кеша
+  const handleRefreshAll = useCallback(async () => {
+    clearProfileCache();
+    clearStatsCache();
+    clearVideosCache();
+    
+    await Promise.all([
+      refetchProfile(),
+      refetchStats(),
+      refetchVideos()
+    ]);
+  }, [refetchProfile, refetchStats, refetchVideos, clearProfileCache, clearStatsCache, clearVideosCache]);
+
+  // Очистить весь кеш
+  const handleClearAllCache = useCallback(() => {
+    if (window.confirm('Are you sure you want to clear all cache? This will force reload all data from server.')) {
+      cacheManager.clear();
+      handleRefreshAll();
+    }
+  }, [handleRefreshAll]);
+
   const formatNumber = (num: number): string => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
-  };
-
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    return `${Math.floor(diffDays / 30)} months ago`;
   };
 
   const formatJoinDate = (dateString: string): string => {
@@ -203,7 +85,7 @@ export default function ProfilePage() {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  // Мемоизируем цвета чтобы не пересчитывать
+  // Мемоизируем цвета
   const colors = useMemo(() => ({
     dark: {
       bg: 'from-slate-950 via-slate-900 to-slate-950',
@@ -234,9 +116,14 @@ export default function ProfilePage() {
     [isDarkMode, colors]
   );
 
+  // Получить статистику кеша
+  const cacheStats = useMemo(() => cacheManager.getStats(), []);
+
   if (!isLoaded) {
     return <div className={`min-h-screen bg-gradient-to-b ${currentColors.bg}`}></div>;
   }
+
+  const isLoading = profileLoading || statsLoading || videosLoading;
 
   return (
     <div className={`min-h-screen bg-gradient-to-b ${currentColors.bg} ${currentColors.text} transition-colors duration-500`}>
@@ -248,6 +135,9 @@ export default function ProfilePage() {
           </Link>
 
           <div className="flex items-center gap-3">
+
+
+            {/* Theme Toggle */}
             <button 
               onClick={toggleTheme}
               className={`p-2 rounded-lg transition-all duration-300 hover:scale-110 ${isDarkMode ? 'bg-slate-900/50 hover:bg-slate-800' : 'bg-slate-200 hover:bg-slate-300'}`}
@@ -270,7 +160,7 @@ export default function ProfilePage() {
 
       {/* Banner */}
       <section className="relative z-10 h-64 md:h-80 w-full overflow-hidden bg-slate-800">
-        {!loading && profile?.banner_url && (
+        {!isLoading && profile?.banner_url && (
           <>
             <img
               src={profile.banner_url}
@@ -282,7 +172,7 @@ export default function ProfilePage() {
           </>
         )}
         
-        {loading && (
+        {isLoading && (
           <div className="w-full h-full flex items-center justify-center">
             <Loader className="w-8 h-8 animate-spin" style={{color: '#4D4AFF'}} />
           </div>
@@ -303,7 +193,7 @@ export default function ProfilePage() {
 
       {/* Profile Info */}
       <section className="relative z-20 max-w-7xl mx-auto px-6 -mt-20">
-        {loading ? (
+        {isLoading ? (
           <div className="flex justify-center py-20">
             <Loader className="w-8 h-8 animate-spin" style={{color: '#4D4AFF'}} />
           </div>
@@ -393,14 +283,14 @@ export default function ProfilePage() {
         </div>
 
         {/* Videos Grid */}
-        {loading ? (
+        {isLoading ? (
           <div className="flex justify-center py-12">
             <Loader className="w-8 h-8 animate-spin" style={{color: '#4D4AFF'}} />
           </div>
         ) : videos.length > 0 ? (
           <>
             <div className={viewMode === 'grid' ? 'grid md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-              {videos.slice(0, visibleVideos).map(video => (
+              {videos.map(video => (
                 <div key={video.id} className="group rounded-xl border backdrop-blur-xl overflow-hidden" style={{background: currentColors.cardBg, borderColor: currentColors.cardBorder}}>
                   <div className="relative overflow-hidden aspect-video">
                     <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
@@ -416,7 +306,7 @@ export default function ProfilePage() {
 
                   <div className="p-4">
                     <h3 className={`text-lg font-bold ${currentColors.text} mb-2`}>{video.title}</h3>
-                    <div className={`flex items-center gap-4 text-sm ${currentColors.textTertiary} mb-3`}>
+                    <div className={`flex items-center gap-4 text-sm ${currentColors.textTertiary}`}>
                       <div className="flex items-center gap-1"><Eye className="w-4 h-4" /><span>{formatNumber(video.views)}</span></div>
                       <div className="flex items-center gap-1"><Heart className="w-4 h-4" /><span>{formatNumber(video.likes)}</span></div>
                       <div className="flex items-center gap-1"><Clock className="w-4 h-4" /><span>{video.createdAt}</span></div>
@@ -426,9 +316,9 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            {visibleVideos < videos.length && (
+            {hasMore && (
               <div className="flex justify-center mt-8">
-                <button onClick={handleLoadMore} className="px-8 py-3 rounded-lg font-bold" style={{background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)', color: '#4D4AFF'}}>
+                <button onClick={loadMore} className="px-8 py-3 rounded-lg font-bold" style={{background: isDarkMode ? 'rgba(77, 74, 255, 0.1)' : 'rgba(77, 74, 255, 0.05)', color: '#4D4AFF'}}>
                   Load More Videos
                 </button>
               </div>
