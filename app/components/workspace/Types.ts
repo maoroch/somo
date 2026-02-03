@@ -2,6 +2,7 @@ export type Tool = 'select' | 'text' | 'image' | 'frame' | 'ai';
 
 export type Theme = 'light' | 'dark';
 
+
 export interface ColorScheme {
   bg: string;
   sidebar: string;
@@ -19,7 +20,7 @@ export interface ColorScheme {
 // Базовый интерфейс для всех элементов canvas
 export interface BaseCanvasElement {
   id: string;
-  x: number;
+  x: number;// components/popup/VideoGenerationPopup
   y: number;
   width: number;
   height: number;
@@ -51,12 +52,25 @@ export interface ImageElement extends BaseCanvasElement {
 
 // Фрейм (контейнер)
 export interface FrameElement extends BaseCanvasElement {
-  type: 'frame';
+  type: 'frame';  
   backgroundColor?: string;
   borderColor?: string;
+  videoUrl?: string; // ✅ ВАЖНО
   borderWidth?: number;
   borderRadius?: number;
   children?: string[]; // ID дочерних элементов
+  
+}
+
+export interface CanvasElementRendererProps {
+  element: CanvasElement;
+  isSelected: boolean;
+  isDarkMode: boolean;
+  zoom: number;
+  onSelect: (id: string) => void;
+  onUpdate: (element: CanvasElement) => void;
+  elementId: string;
+  autoOpenPopup?: boolean; // Добавляем опциональный пропс
 }
 
 // Видео

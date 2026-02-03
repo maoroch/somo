@@ -80,16 +80,22 @@ export default function WorkspacePage() {
     setShowGrid(prev => !prev);
   }, []);
 
+  // ✅ ДОБАВИТЬ НОВЫЙ ЭЛЕМЕНТ
+  const handleAddElement = useCallback((element: CanvasElement) => {
+    setCanvasElements(prev => [...prev, element]);
+  }, []);
+
+  // ✅ ДОБАВИТЬ ЭЛЕМЕНТ (для старых кнопок)
   const addElement = useCallback((type: ElementType) => {
     const newElement = ElementFactory.createElement(type, {
       x: 100,
       y: 100,
       isDarkMode
     });
-    setCanvasElements(prev => [...prev, newElement]);
+    handleAddElement(newElement);
     setSelectedElement(newElement.id);
     setActiveTool('select');
-  }, [isDarkMode]);
+  }, [isDarkMode, handleAddElement]);
 
   const handleSelectElement = useCallback((id: string) => {
     setSelectedElement(id);
@@ -109,6 +115,22 @@ export default function WorkspacePage() {
     handleMouseMove(e, setPanOffset);
   }, [handleMouseMove]);
 
+  // ✅ ОБНОВЛЕННЫЙ ОБРАБОТЧИК ДЛЯ ВЫБОРА ИНСТРУМЕНТА
+  const handleToolChange = useCallback((tool: Tool) => {
+    if (tool === 'text') {
+      // ✅ Для Text: активируем инструмент и ждём клика на холст
+      setActiveTool(tool);
+    } else if (tool === 'image' || tool === 'frame') {
+      // Для image и frame создаём новый элемент сразу (опционально)
+      addElement(tool);
+    } else {
+      // Для остальных (select, ai)
+      setActiveTool(tool);
+    }
+    
+    
+  }, [addElement]);
+
   // Текущая цветовая схема
   const currentColors = isDarkMode ? colors.dark : colors.light;
 
@@ -123,13 +145,7 @@ export default function WorkspacePage() {
         isDarkMode={isDarkMode}
         activeTool={activeTool}
         showSettingsPopup={showSettingsPopup}
-        onToolChange={(tool) => {
-          if (tool === 'text' || tool === 'image' || tool === 'frame') {
-            addElement(tool);
-          } else {
-            setActiveTool(tool);
-          }
-        }}
+        onToolChange={handleToolChange}
         onSettingsClick={() => setShowSettingsPopup(true)}
         colors={currentColors}
         tools={tools}
@@ -138,17 +154,17 @@ export default function WorkspacePage() {
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-<Sidebar
-  collapsed={sidebarCollapsed}
-  onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
-  items={sidebarItems}
-  isDarkMode={isDarkMode}
-  showSettingsPopup={showSettingsPopup}
-  onSettingsClick={() => setShowSettingsPopup(true)}
-  showProjectsPopup={showProjectsPopup}           // ← настоящее состояние
-  onProjectsClick={() => setShowProjectsPopup(true)} // ← открывает попап
-  colors={currentColors}
-/>
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
+          items={sidebarItems}
+          isDarkMode={isDarkMode}
+          showSettingsPopup={showSettingsPopup}
+          onSettingsClick={() => setShowSettingsPopup(true)}
+          showProjectsPopup={showProjectsPopup}
+          onProjectsClick={() => setShowProjectsPopup(true)}
+          colors={currentColors}
+        />
 
         {/* Canvas Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -171,19 +187,15 @@ export default function WorkspacePage() {
             showGrid={showGrid}
             isDarkMode={isDarkMode}
             isPanning={isPanning}
+            activeTool={activeTool} // ← ПЕРЕДАЁМ АКТИВНЫЙ ИНСТРУМЕНТ
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleMouseUp}
             onSelectElement={handleSelectElement}
             onUpdateElement={handleUpdateElement}
-            onActivateTool={(tool) => {
-              if (tool === 'text' || tool === 'image' || tool === 'frame') {
-                addElement(tool);
-              } else {
-                setActiveTool(tool);
-              }
-            }}
+            onActivateTool={setActiveTool}
             onAddText={() => addElement('text')}
+            onAddElement={handleAddElement} // ← ПЕРЕДАЁМ ФУНКЦИЮ ДОБАВЛЕНИЯ
             onZoomChange={handleZoomChange}
             onPanOffsetChange={handlePanOffsetChange}
             colors={currentColors}
@@ -191,19 +203,19 @@ export default function WorkspacePage() {
         </div>
       </div>
 
-{/* Popups */}
-<ProjectsPopup
-  isOpen={showProjectsPopup}
-  onClose={() => setShowProjectsPopup(false)}
-  isDarkMode={isDarkMode}           // ← передаём тему
-/>
+      {/* Popups */}
+      <ProjectsPopup
+        isOpen={showProjectsPopup}
+        onClose={() => setShowProjectsPopup(false)}
+        isDarkMode={isDarkMode}
+      />
 
-<SettingsPopup
-  isOpen={showSettingsPopup}
-  onClose={() => setShowSettingsPopup(false)}
-  isDarkMode={isDarkMode}
-  onToggleTheme={toggleTheme}
-/>
+      <SettingsPopup
+        isOpen={showSettingsPopup}
+        onClose={() => setShowSettingsPopup(false)}
+        isDarkMode={isDarkMode}
+        onToggleTheme={toggleTheme}
+      />
 
       {/* Стили */}
       <style jsx>{`
