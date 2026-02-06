@@ -97,75 +97,74 @@ const Canvas = forwardRef<HTMLDivElement, CanvasProps>(({
   };
 
   // Обработка клика на холсте для создания элементов
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool === 'text' || activeTool === 'image' || activeTool === 'frame') {
-      if (e.target === canvasRef || (e.target as HTMLElement).closest('.canvas-bg')) {
-        const rect = canvasRef!.getBoundingClientRect();
-        const offsetRect = (viewportRef as React.RefObject<HTMLDivElement>).current?.getBoundingClientRect();
+// В Canvas.tsx внутри handleCanvasClick:
+// Canvas.tsx - исправленный handleCanvasClick для frame
+const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  if (activeTool === 'text' || activeTool === 'image' || activeTool === 'frame') {
+    if (e.target === canvasRef || (e.target as HTMLElement).closest('.canvas-bg')) {
+      const rect = canvasRef!.getBoundingClientRect();
+      const offsetRect = (viewportRef as React.RefObject<HTMLDivElement>).current?.getBoundingClientRect();
+      
+      if (!offsetRect) return;
+
+      const clickX = e.clientX - offsetRect.left;
+      const clickY = e.clientY - offsetRect.top;
+
+      const canvasX = (clickX - centeredPanOffset.x) / scale;
+      const canvasY = (clickY - centeredPanOffset.y) / scale;
+
+      if (canvasX < 0 || canvasY < 0 || canvasX > canvasWidth || canvasY > canvasHeight) {
+        return;
+      }
+
+      const newElement = ElementFactory.createElement(activeTool, {
+        x: canvasX,
+        y: canvasY,
+        isDarkMode
+      });
+
+      if (activeTool === 'frame' && onAddElement) {
+        const frameElement = newElement as FrameElement;
+        onAddElement(frameElement);
+        onSelectElement(frameElement.id);
         
-        if (!offsetRect) return;
-
-        const clickX = e.clientX - offsetRect.left;
-        const clickY = e.clientY - offsetRect.top;
-
-        const canvasX = (clickX - centeredPanOffset.x) / scale;
-        const canvasY = (clickY - centeredPanOffset.y) / scale;
-
-        if (canvasX < 0 || canvasY < 0 || canvasX > canvasWidth || canvasY > canvasHeight) {
-          return;
-        }
-
-        const newElement = ElementFactory.createElement(activeTool, {
-          x: canvasX,
-          y: canvasY,
-          isDarkMode
-        });
-
-        // Если это frame, добавляем его ID в список новых frame элементов
-        if (activeTool === 'frame') {
-          const frameElement = newElement as FrameElement;
-          if (!frameElement.videoUrl) {
-            setNewFrameElements(prev => [...prev, frameElement.id]);
-            // Автоматически открываем popup для нового frame
-            setPopupFrameId(frameElement.id);
-            setIsPopupOpen(true);
+        // ✅ СРАЗУ ОТКРЫВАЕМ POPUP ДЛЯ НОВОГО FRAME
+        setTimeout(() => {
+          setPopupFrameId(frameElement.id);
+          setIsPopupOpen(true);
+        }, 50); // Небольшая задержка для плавности
+      } 
+      else if (activeTool === 'text' && onAddElement) {
+        onAddElement(newElement);
+        onSelectElement(newElement.id);
+        
+        // Для текста автоматически включаем редактирование
+        setTimeout(() => {
+          const textElement = document.querySelector(`[data-element-id="${newElement.id}"]`);
+          if (textElement) {
+            textElement.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
           }
-        }
-
-        if (activeTool === 'text' && onAddElement) {
-          onAddElement(newElement);
-          onSelectElement(newElement.id);
-          
-          setTimeout(() => {
-            const textElement = document.querySelector(`[data-element-id="${newElement.id}"]`);
-            if (textElement) {
-              textElement.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-            }
-          }, 100);
-        } else if (onAddElement) {
-          onAddElement(newElement);
-          onSelectElement(newElement.id);
-        }
+        }, 100);
+      }
+      else if (onAddElement) {
+        onAddElement(newElement);
+        onSelectElement(newElement.id);
       }
     }
-  }, [activeTool, canvasRef, centeredPanOffset, scale, canvasWidth, canvasHeight, viewportRef, onAddElement, onSelectElement]);
-
-  // Очищаем элементы из списка новых, когда они получают видео
-  useEffect(() => {
-    elements.forEach(element => {
-      if (element.type === 'frame') {
-        const frameElement = element as FrameElement;
-        if (frameElement.videoUrl && newFrameElements.includes(frameElement.id)) {
-          setNewFrameElements(prev => prev.filter(id => id !== frameElement.id));
-          // Если это тот frame, для которого открыт popup, закрываем его
-          if (popupFrameId === frameElement.id) {
-            setIsPopupOpen(false);
-            setPopupFrameId(null);
-          }
-        }
+  }
+}, [activeTool, canvasRef, centeredPanOffset, scale, canvasWidth, canvasHeight, viewportRef, onAddElement, onSelectElement]);  // Очищаем элементы из списка новых, когда они получают видео
+useEffect(() => {
+  elements.forEach(element => {
+    if (element.type === 'frame') {
+      const frameElement = element as FrameElement;
+      if (frameElement.videoUrl && popupFrameId === frameElement.id) {
+        // Если этот frame получил видео и у него открыт popup - закрываем
+        setIsPopupOpen(false);
+        setPopupFrameId(null);
       }
-    });
-  }, [elements, newFrameElements, popupFrameId]);
+    }
+  });
+}, [elements, popupFrameId]);
 
   // Обработчик для открытия popup из FrameTool
   const handleOpenPopup = useCallback(() => {

@@ -1,5 +1,5 @@
 // FrameTool.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Sparkles } from 'lucide-react';
 import { FrameElement } from '../Types';
 
@@ -10,7 +10,6 @@ interface FrameToolProps {
   zoom: number;
   onSelect: (id: string) => void;
   onUpdate: (element: FrameElement) => void;
-  autoOpenPopup?: boolean;
   onOpenPopup?: () => void;
 }
 
@@ -21,7 +20,6 @@ export const FrameTool: React.FC<FrameToolProps> = ({
   zoom,
   onSelect,
   onUpdate,
-  autoOpenPopup = false,
   onOpenPopup
 }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -29,14 +27,6 @@ export const FrameTool: React.FC<FrameToolProps> = ({
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [initialBounds, setInitialBounds] = useState({ x: 0, y: 0, width: 0, height: 0 });
-
-  // Автоматически открываем popup при создании нового элемента
-  useEffect(() => {
-    if (autoOpenPopup && isSelected && !element.videoUrl && onOpenPopup) {
-      console.log('Auto-opening popup for new frame element:', element.id);
-      onOpenPopup();
-    }
-  }, [autoOpenPopup, isSelected, element.videoUrl, onOpenPopup, element.id]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 0) {
@@ -119,8 +109,10 @@ export const FrameTool: React.FC<FrameToolProps> = ({
     });
   }, [element.id, element.x, element.y, element.width, element.height, onSelect]);
 
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+  // ✅ ОДИН КЛИК для открытия popup для существующих frame без видео
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    // Если frame без видео, открываем popup
     if (onOpenPopup && !element.videoUrl) {
       onOpenPopup();
     }
@@ -139,7 +131,7 @@ export const FrameTool: React.FC<FrameToolProps> = ({
         height: element.height,
         transform: `rotate(${element.rotation}deg)`,
         opacity: element.opacity || 1,
-        cursor: isDragging || isResizing ? 'grabbing' : 'grab',
+        cursor: isDragging || isResizing ? 'grabbing' : (element.videoUrl ? 'grab' : 'pointer'),
         willChange: isDragging || isResizing ? 'transform' : 'auto',
         pointerEvents: element.locked ? 'none' : 'auto',
         display: element.visible === false ? 'none' : 'block'
@@ -148,7 +140,7 @@ export const FrameTool: React.FC<FrameToolProps> = ({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onDoubleClick={handleDoubleClick}
+      onClick={handleClick}
     >
       {/* Frame Content */}
       <div
@@ -169,11 +161,11 @@ export const FrameTool: React.FC<FrameToolProps> = ({
             muted
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center opacity-50 group-hover:opacity-100 transition-opacity">
+          <div className="absolute inset-0 flex items-center justify-center opacity-50 group-hover:opacity-100 transition-opacity cursor-pointer">
             <div className="text-center p-4">
               <Sparkles className="w-8 h-8 mx-auto mb-2" style={{ color: '#4D4AFF' }} />
               <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                AI Video Frame (Double-click to generate)
+                {isSelected ? 'Click to generate video' : 'AI Video Frame'}
               </span>
             </div>
           </div>

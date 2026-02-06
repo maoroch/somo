@@ -32,16 +32,16 @@ const CanvasElementRenderer: React.FC<CanvasElementRendererProps> = ({
   switch (element.type) {
     case 'frame':
       return (
-        <FrameTool
-          element={element as FrameElement}
-          isSelected={isSelected}
-          isDarkMode={isDarkMode}
-          zoom={zoom}
-          onSelect={onSelect}
-          onUpdate={onUpdate}
-          autoOpenPopup={autoOpenPopup}
-          onOpenPopup={onOpenPopup}
-        />
+    <FrameTool
+      element={element as FrameElement}
+      isSelected={isSelected}
+      isDarkMode={isDarkMode}
+      zoom={zoom}
+      onSelect={onSelect}
+      onUpdate={onUpdate}
+      onOpenPopup={onOpenPopup}
+    />
+
       );
     
     case 'text':
