@@ -6,6 +6,9 @@ import { ChevronRight, Play, Sparkles, Zap, BarChart3, Users } from 'lucide-reac
 import { getInitialTheme, saveTheme, type Theme } from '@/lib/theme-utils';
 import Navbar from '@/app/components/landing/Navbar';
 import FeaturesSection from '@/app/components/landing/FeaturesSection';
+import TestimonialsSection from '@/app/components/landing/TestimonialsSection';
+import HowItWorksSection from '@/app/components/landing/HowItWorksSection';
+import CTASection from '@/app/components/landing/CTASection';
 export default function SomoLanding() {
   const [scrollY, setScrollY] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -153,143 +156,13 @@ export default function SomoLanding() {
         <FeaturesSection isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
 
         {/* How It Works */}
-        <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-20 md:py-32">
-          <div className="text-center mb-16 space-y-4">
-            <h2 className={`text-4xl md:text-5xl font-black ${currentColors.text}`}>
-              Three Simple Steps
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-12">
-            {[
-              { step: '01', title: 'Write Your Script', desc: 'Type or paste your text. Our AI understands context and emotion.' },
-              { step: '02', title: 'Customize Everything', desc: 'Pick voices, styles, music, and visual effects in seconds.' },
-              { step: '03', title: 'Export & Share', desc: 'Generate your video and share directly to social media.' },
-            ].map((item, i) => (
-              <div key={i} className="space-y-4 group">
-                <div className={`text-6xl font-black ${currentColors.text} opacity-40 group-hover:opacity-100 transition`}>
-                  {item.step}
-                </div>
-                <h3 className={`text-2xl font-bold ${currentColors.text}`}>{item.title}</h3>
-                <p className={currentColors.textTertiary}>{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <HowItWorksSection isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
 
         {/* Testimonials Section */}
-        <section className="max-w-7xl mx-auto px-6 py-20 md:py-32">
-          <div className="text-center mb-16 space-y-4">
-            <h2 className={`text-4xl md:text-5xl font-black ${currentColors.text}`}>
-              Loved by Creators
-            </h2>
-            <p className={`${currentColors.textTertiary} text-lg max-w-2xl mx-auto`}>
-              See what creators are saying about Somo
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                name: 'Sarah Chen',
-                role: 'Content Creator',
-                image: '👩‍💼',
-                text: 'Somo has completely transformed my workflow. I can create professional videos in minutes instead of hours. Absolutely game-changing!',
-                rating: 5,
-              },
-              {
-                name: 'Marcus Johnson',
-                role: 'Marketing Manager',
-                image: '👨‍💼',
-                text: 'The AI voiceover quality is incredible. Our team uses it for all social media content now. ROI has been fantastic.',
-                rating: 5,
-              },
-              {
-                name: 'Emma Rodriguez',
-                role: 'YouTube Creator',
-                image: '👩‍🎨',
-                text: 'Finally a tool that understands creators! The automatic subtitles and formatting for different platforms saves me so much time.',
-                rating: 5,
-              },
-              {
-                name: 'David Kim',
-                role: 'Entrepreneur',
-                image: '👨‍💻',
-                text: 'The learning curve is minimal and results are instant. Best investment for my content strategy this year.',
-                rating: 5,
-              },
-              {
-                name: 'Lisa Anderson',
-                role: 'Brand Manager',
-                image: '👩‍🔬',
-                text: 'Team collaboration features are seamless. We can work together on projects without any hassle. Highly recommend!',
-                rating: 5,
-              },
-              {
-                name: 'James Wilson',
-                role: 'Podcast Host',
-                image: '👨‍🎤',
-                text: 'Converting my podcast transcripts into video content has never been easier. Somo is a lifesaver for content creators.',
-                rating: 5,
-              },
-            ].map((testimonial, i) => (
-              <div
-                key={i}
-                className={`group p-8 rounded-xl backdrop-blur-xl border transition-all duration-300 hover:-translate-y-2 hover:shadow-xl`}
-                style={{
-                  background: currentColors.cardBg,
-                  border: `1px solid ${currentColors.cardBorder}`,
-                  boxShadow: isDarkMode ? '0 8px 32px rgba(77, 74, 255, 0.1)' : '0 8px 32px rgba(77, 74, 255, 0.05)',
-                }}
-              >
-                <div className="flex gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, j) => (
-                    <span key={j} style={{color: '#4D4AFF'}}>★</span>
-                  ))}
-                </div>
-
-                <p className={`${currentColors.textSecondary} text-sm mb-6 leading-relaxed`}>
-                  "{testimonial.text}"
-                </p>
-
-                <div className={`flex items-center gap-3 pt-4 border-t`} style={{borderColor: currentColors.cardBorder}}>
-                  <div className="text-3xl">{testimonial.image}</div>
-                  <div>
-                    <p className={`${currentColors.text} font-semibold text-sm`}>{testimonial.name}</p>
-                    <p className={`${currentColors.textTertiary} text-xs`}>{testimonial.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <TestimonialsSection isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
 
         {/* CTA Section */}
-        <section className="max-w-4xl mx-auto px-6 py-20 md:py-10">
-          <div className="relative p-12 md:p-16 rounded-2xl border overflow-hidden transition-all duration-500" style={{background: currentColors.cardBg, borderColor: 'rgba(77, 74, 255, 0.3)'}}>
-            <div className="absolute inset-0 blur-3xl" style={{background: 'linear-gradient(135deg, rgba(77, 74, 255, 0.05), rgba(3, 0, 186, 0.05))'}} />
-
-            <div className="relative z-10 space-y-8 text-center">
-              <h2 className={`text-4xl md:text-5xl font-black ${currentColors.text}`}>
-                Ready to Create?
-              </h2>
-              <p className={`text-lg ${currentColors.textSecondary} max-w-2xl mx-auto`}>
-                Join thousands of creators using Somo to produce amazing videos. Start free today – no credit card needed.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link href="/sign-up">
-                  <button className="px-8 py-4 rounded-lg font-bold text-lg hover:shadow-2xl transition-all text-white" style={{background: 'linear-gradient(135deg, #4D4AFF, #0300BA)', boxShadow: '0 0 30px rgba(77, 74, 255, 0.3)'}}>
-                    Get Started Free
-                  </button>
-                </Link>
-                <button className="px-8 py-4 border rounded-lg font-bold text-lg transition-all hover:shadow-lg" style={{borderColor: 'rgba(77, 74, 255, 0.5)', color: '#4D4AFF'}}>
-                  View Pricing
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
+        <CTASection isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
       </main>
 
       {/* Footer */}
