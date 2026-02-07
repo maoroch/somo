@@ -3,6 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronRight, Sparkles, Zap, BarChart3, Moon, Sun, X } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
+import PricingPopup from '@/app/components/landing/Pricingpopup';
 
 export default function Navbar({ isDarkMode, toggleTheme }: { isDarkMode: boolean; toggleTheme: () => void }) {
   const [showNavbar, setShowNavbar] = useState(true);
@@ -79,10 +80,21 @@ export default function Navbar({ isDarkMode, toggleTheme }: { isDarkMode: boolea
     setMobileMenuOpen(false);
   };
 
+  // Обработчик для Pricing - открывает popup через селектор
+  const handlePricingClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // Находит кнопку в документе и кликает по ней
+    const pricingButton = document.querySelector('[data-pricing-trigger]') as HTMLButtonElement;
+    if (pricingButton) {
+      pricingButton.click();
+    }
+    setMobileMenuOpen(false);
+  };
+
   const navLinks = [
     { label: 'Features', href: '#features', icon: Sparkles },
     { label: 'How It Works', href: '#how-it-works', icon: Zap },
-    { label: 'Pricing', href: '#pricing', icon: BarChart3 },
+    { label: 'Pricing', href: '#pricing', icon: BarChart3, onClick: handlePricingClick },
   ];
 
   return (
@@ -112,6 +124,7 @@ export default function Navbar({ isDarkMode, toggleTheme }: { isDarkMode: boolea
                 <a
                   key={item.href}
                   href={item.href}
+                  onClick={item.onClick}
                   className={`group px-4 py-2 rounded-lg text-sm ${currentColors.textSecondary} transition-all flex items-center gap-2 ${currentColors.hoverBg}`}
                 >
                   <IconComponent className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" style={{color: '#4D4AFF'}} />
@@ -249,7 +262,13 @@ export default function Navbar({ isDarkMode, toggleTheme }: { isDarkMode: boolea
                   <a
                     key={item.href}
                     href={item.href}
-                    onClick={handleNavClick}
+                    onClick={(e) => {
+                      if (item.onClick) {
+                        item.onClick(e);
+                      } else {
+                        handleNavClick();
+                      }
+                    }}
                     className={`group flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentColors.hoverBg}`}
                     style={{
                       background: isDarkMode 
@@ -308,6 +327,9 @@ export default function Navbar({ isDarkMode, toggleTheme }: { isDarkMode: boolea
           </div>
         </div>
       </nav>
+
+      {/* PricingPopup Component */}
+      <PricingPopup isDarkMode={isDarkMode} />
 
       <div className="h-0 md:h-16"></div>
 
